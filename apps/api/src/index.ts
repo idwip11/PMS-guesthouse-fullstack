@@ -1,0 +1,59 @@
+
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import * as dotenv from 'dotenv';
+import { db } from './db';
+import { users } from './db/schema';
+
+// Import Routes
+import roomsRouter from './routes/rooms';
+import usersRouter from './routes/users';
+import guestsRouter from './routes/guests';
+import reservationsRouter from './routes/reservations';
+import expensesRouter from './routes/expenses';
+import inventoryRouter from './routes/inventory';
+import maintenanceRouter from './routes/maintenance';
+import shiftsRouter from './routes/shifts';
+import authRouter from './routes/auth';
+import cleaningTasksRouter from './routes/cleaningTasks';
+
+dotenv.config();
+
+const app = express();
+const port = process.env.PORT || 3000;
+
+app.use(helmet());
+app.use(cors());
+app.use(express.json());
+
+app.get('/', (req, res) => {
+  res.json({ message: 'Welcome to HomiQ PMS API' });
+});
+
+app.get('/health', async (req, res) => {
+  try {
+    // Simple query to check DB connection
+    const result = await db.select({ id: users.id }).from(users).limit(1);
+    res.json({ status: 'ok', db: 'connected', sample: result });
+  } catch (error) {
+    console.error('DB Connection Error:', error);
+    res.status(500).json({ status: 'error', message: 'Database connection failed' });
+  }
+});
+
+// Mount API Routes
+app.use('/api/auth', authRouter);
+app.use('/api/rooms', roomsRouter);
+app.use('/api/users', usersRouter);
+app.use('/api/guests', guestsRouter);
+app.use('/api/reservations', reservationsRouter);
+app.use('/api/expenses', expensesRouter);
+app.use('/api/inventory', inventoryRouter);
+app.use('/api/maintenance', maintenanceRouter);
+app.use('/api/shifts', shiftsRouter);
+app.use('/api/cleaning-tasks', cleaningTasksRouter);
+
+app.listen(port, () => {
+  console.log(`Server is running at http://localhost:${port}`);
+});
