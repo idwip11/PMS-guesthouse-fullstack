@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { expensesApi, uploadFile, usersApi } from '../services/api';
+import type { User } from '../types';
 
 interface LogExpenseModalProps {
   isOpen: boolean;
@@ -7,6 +9,29 @@ interface LogExpenseModalProps {
 
 export default function LogExpenseModal({ isOpen, onClose }: LogExpenseModalProps) {
   const [isVisible, setIsVisible] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [description, setDescription] = useState('');
+  const [category, setCategory] = useState('');
+  const [amount, setAmount] = useState('');
+  const [dateIncurred, setDateIncurred] = useState(new Date().toISOString().split('T')[0]);
+  const [notes, setNotes] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [adminUser, setAdminUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    // Fetch a default admin/staff user to link the expense to
+    const fetchUser = async () => {
+      try {
+        const users = await usersApi.getAll();
+        if (users.length > 0) {
+          setAdminUser(users[0]);
+        }
+      } catch (err) {
+        console.error('Failed to fetch users', err);
+      }
+    };
+    fetchUser();
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -16,6 +41,57 @@ export default function LogExpenseModal({ isOpen, onClose }: LogExpenseModalProp
       return () => clearTimeout(timer);
     }
   }, [isOpen]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setFile(file);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminUser) {
+        alert("System error: No active user context found.");
+        return;
+    }
+
+    setLoading(true);
+    try {
+        let receiptUrl = '';
+        if (file) {
+            const uploadRes = await uploadFile(file);
+            receiptUrl = uploadRes.url;
+        }
+
+        await expensesApi.create({
+            loggedByUserId: adminUser.id,
+            description,
+            category,
+            amount,
+            dateIncurred,
+            notes,
+            receiptUrl,
+            status: 'Pending'
+        });
+
+        alert('Expense submitted successfully!');
+        
+        // Reset and close
+        setDescription('');
+        setCategory('');
+        setAmount('');
+        setNotes('');
+        setFile(null);
+        onClose();
+        
+    } catch (err) {
+        console.error('Error submitting expense:', err);
+        alert(`Failed to submit expense: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+        setLoading(false);
+    }
+  };
 
   if (!isVisible && !isOpen) return null;
 
@@ -49,7 +125,7 @@ export default function LogExpenseModal({ isOpen, onClose }: LogExpenseModalProp
           </div>
           
           <div className="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-10 pt-0 z-10">
-             <form onSubmit={(e) => e.preventDefault()}>
+             <form onSubmit={handleSubmit}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                    <div className="space-y-6">
                       <div>
@@ -58,9 +134,12 @@ export default function LogExpenseModal({ isOpen, onClose }: LogExpenseModalProp
                          </label>
                          <div className="relative">
                             <input 
+                               value={description}
+                               onChange={(e) => setDescription(e.target.value)}
                                className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 pl-11 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all placeholder-slate-400" 
                                placeholder="e.g. Plumbing Repair Room 104" 
                                type="text"
+                               required
                             />
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 material-icons-round text-xl">description</span>
                          </div>
@@ -70,15 +149,20 @@ export default function LogExpenseModal({ isOpen, onClose }: LogExpenseModalProp
                             Category <span className="text-red-500">*</span>
                          </label>
                          <div className="relative">
-                            <select className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 pl-11 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all appearance-none cursor-pointer">
-                               <option disabled selected>Select a category...</option>
-                               <option>Repairs & Maintenance</option>
-                               <option>Utilities (Water, Power, WiFi)</option>
-                               <option>Supplies & Inventory</option>
-                               <option>IT & Software</option>
-                               <option>Staff & Labor</option>
-                               <option>Marketing</option>
-                               <option>Other</option>
+                            <select 
+                               value={category}
+                               onChange={(e) => setCategory(e.target.value)}
+                               className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 pl-11 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all appearance-none cursor-pointer"
+                               required
+                            >
+                               <option value="" disabled>Select a category...</option>
+                               <option value="Repairs & Maintenance">Repairs & Maintenance</option>
+                               <option value="Utilities">Utilities (Water, Power, WiFi)</option>
+                               <option value="Supplies & Inventory">Supplies & Inventory</option>
+                               <option value="IT & Software">IT & Software</option>
+                               <option value="Staff & Labor">Staff & Labor</option>
+                               <option value="Marketing">Marketing</option>
+                               <option value="Other">Other</option>
                             </select>
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 material-icons-round text-xl">category</span>
                             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 material-icons-round pointer-events-none">expand_more</span>
@@ -92,10 +176,13 @@ export default function LogExpenseModal({ isOpen, onClose }: LogExpenseModalProp
                             <div className="relative">
                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">Rp</span>
                                <input 
+                                  value={amount}
+                                  onChange={(e) => setAmount(e.target.value)}
                                   className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 pl-8 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all placeholder-slate-400" 
                                   placeholder="0.00" 
                                   step="0.01" 
                                   type="number"
+                                  required
                                />
                             </div>
                          </div>
@@ -104,8 +191,11 @@ export default function LogExpenseModal({ isOpen, onClose }: LogExpenseModalProp
                                Date Incurred <span className="text-red-500">*</span>
                             </label>
                             <input 
+                               value={dateIncurred}
+                               onChange={(e) => setDateIncurred(e.target.value)}
                                className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all placeholder-slate-400" 
                                type="date"
+                               required
                             />
                          </div>
                       </div>
@@ -114,6 +204,8 @@ export default function LogExpenseModal({ isOpen, onClose }: LogExpenseModalProp
                       <div>
                          <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Additional Notes</label>
                          <textarea 
+                            value={notes}
+                            onChange={(e) => setNotes(e.target.value)}
                             className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all placeholder-slate-400 resize-none h-32" 
                             placeholder="Add any relevant details, approval codes, or context..."
                          ></textarea>
@@ -123,13 +215,18 @@ export default function LogExpenseModal({ isOpen, onClose }: LogExpenseModalProp
                             Receipt / Invoice
                             <span className="text-xs font-normal text-slate-400 ml-2">(Optional)</span>
                          </label>
-                         <div className="file-drop-zone rounded-xl p-8 flex flex-col items-center justify-center text-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group relative">
-                            <input className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" type="file" />
+                         <div className={`file-drop-zone rounded-xl p-8 flex flex-col items-center justify-center text-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group relative border-2 border-dashed ${file ? 'border-primary bg-primary/5' : 'border-slate-200 dark:border-slate-700'}`}>
+                            <input 
+                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
+                              type="file" 
+                              accept="image/*,.pdf"
+                              onChange={handleFileChange}
+                            />
                             <div className="w-12 h-12 bg-white dark:bg-slate-700 rounded-full shadow-sm flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300">
-                               <span className="material-icons-round text-2xl text-primary">cloud_upload</span>
+                               <span className={`material-icons-round text-2xl ${file ? 'text-green-500' : 'text-primary'}`}>{file ? 'check' : 'cloud_upload'}</span>
                             </div>
-                            <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Click to upload or drag and drop</p>
-                            <p className="text-xs text-slate-400 mt-1">PDF, JPG, PNG up to 10MB</p>
+                            <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{file ? file.name : 'Click to upload or drag and drop'}</p>
+                            <p className="text-xs text-slate-400 mt-1">{file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : 'PDF, JPG, PNG up to 10MB'}</p>
                          </div>
                       </div>
                    </div>
@@ -139,16 +236,21 @@ export default function LogExpenseModal({ isOpen, onClose }: LogExpenseModalProp
                       onClick={onClose}
                       className="px-6 py-3 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 font-medium transition-colors w-full sm:w-auto text-center" 
                       type="button"
+                      disabled={loading}
                    >
                       Cancel
                    </button>
                    <button 
-                      onClick={onClose}
                       className="px-6 py-3 rounded-xl bg-primary text-white hover:bg-blue-600 shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 font-medium transition-all flex items-center justify-center gap-2 w-full sm:w-auto" 
-                      type="button"
+                      type="submit"
+                      disabled={loading}
                    >
-                      <span className="material-icons-round">check_circle</span>
-                      Submit Expense
+                      {loading ? (
+                         <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                      ) : (
+                         <span className="material-icons-round">check_circle</span>
+                      )}
+                      {loading ? 'Submitting...' : 'Submit Expense'}
                    </button>
                 </div>
              </form>

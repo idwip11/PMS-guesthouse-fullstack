@@ -177,7 +177,10 @@ export default function Header({ onNewBooking, onCreateInvoice, onNewTask, onLog
             Create Invoice
           </button>
         ) : isMarketing ? (
-          <button className="bg-primary hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-medium shadow-lg shadow-blue-500/30 transition-all flex items-center gap-2">
+          <button 
+            className="bg-primary hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-medium shadow-lg shadow-blue-500/30 transition-all flex items-center gap-2"
+            onClick={() => window.open('http://localhost:3000/api/marketing/export', '_blank')}
+          >
             <span className="material-icons-round text-lg">file_download</span>
             Export Excel
           </button>

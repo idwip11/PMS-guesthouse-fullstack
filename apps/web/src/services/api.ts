@@ -20,6 +20,22 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> 
   return response.json();
 }
 
+export const uploadFile = async (file: File): Promise<{ url: string, filename: string }> => {
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  const response = await fetch(`${API_BASE_URL}/upload`, {
+    method: 'POST',
+    body: formData,
+  });
+  
+  if (!response.ok) {
+    throw new Error('File upload failed');
+  }
+  
+  return response.json();
+};
+
 // --- ROOMS API ---
 export const roomsApi = {
   getAll: () => fetchApi<import('../types').Room[]>('/rooms'),
@@ -59,9 +75,21 @@ export const reservationsApi = {
   getById: (id: string) => fetchApi<import('../types').Reservation>(`/reservations/${id}`),
   create: (data: Partial<import('../types').Reservation>) =>
     fetchApi<import('../types').Reservation>('/reservations', { method: 'POST', body: JSON.stringify(data) }),
+
+  getPayments: (id: string) =>
+    fetchApi<import('../types').Payment[]>(`/reservations/${id}/payments`),
+  addPayment: (id: string, data: Partial<import('../types').Payment>) =>
+    fetchApi<import('../types').Payment>(`/reservations/${id}/payments`, { method: 'POST', body: JSON.stringify(data) }),
+  updatePayment: (paymentId: string, data: Partial<import('../types').Payment>) =>
+    fetchApi<import('../types').Payment>(`/reservations/payments/${paymentId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deletePayment: (paymentId: string) =>
+    fetchApi<{ message: string }>(`/reservations/payments/${paymentId}`, { method: 'DELETE' }),
+
   update: (id: string, data: Partial<import('../types').Reservation>) =>
     fetchApi<import('../types').Reservation>(`/reservations/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) => fetchApi<{ message: string }>(`/reservations/${id}`, { method: 'DELETE' }),
+  createWithDetails: (data: any) =>
+    fetchApi<any>('/reservations/with-details', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 // --- EXPENSES API ---
@@ -119,3 +147,37 @@ export const cleaningTasksApi = {
   delete: (id: string) => fetchApi<{ message: string }>(`/cleaning-tasks/${id}`, { method: 'DELETE' }),
 };
 
+// --- FINANCE API ---
+export const financeApi = {
+  getDashboard: (month?: number, year?: number) => {
+    let url = '/finance/dashboard';
+    const params = new URLSearchParams();
+    if (month) params.append('month', month.toString());
+    if (year) params.append('year', year.toString());
+    
+    if (params.toString()) {
+        url += `?${params.toString()}`;
+    }
+    return fetchApi<{
+        kpi: {
+          totalRevenue: number;
+          outstanding: number;
+          opExpenses: number;
+          netProfit: number;
+        };
+        transactions: any[];
+        chartData: any[];
+        paymentMethods: any[];
+        target: {
+            currentRevenue: number;
+            monthlyTarget: number;
+        };
+        filter: {
+            month: number;
+            year: number;
+        }
+      }>(url);
+  },
+  saveTarget: (data: { month: number; year: number; targetAmount: number }) => 
+    fetchApi<{ success: boolean }>('/finance/target', { method: 'POST', body: JSON.stringify(data) }),
+};

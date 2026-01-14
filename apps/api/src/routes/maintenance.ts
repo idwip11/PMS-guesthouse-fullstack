@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db';
 import { maintenanceTickets } from '../db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and, or } from 'drizzle-orm';
 
 const router = Router();
 
@@ -53,6 +53,58 @@ router.post('/', async (req, res) => {
   } catch (error) {
     console.error('Error creating maintenance ticket:', error);
     res.status(500).json({ message: 'Failed to create maintenance ticket' });
+  }
+});
+
+// POST /api/maintenance/room/:roomId - Upsert (Create or Update) maintenance ticket for a room
+router.post('/room/:roomId', async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { issueType, description, priority, status } = req.body;
+
+    if (!roomId || !issueType) {
+      return res.status(400).json({ message: 'roomId and issueType are required' });
+    }
+
+    // Check for existing Open or In_Progress ticket
+    const existingTicket = await db.select().from(maintenanceTickets)
+      .where(and(
+        eq(maintenanceTickets.roomId, Number(roomId)),
+        or(eq(maintenanceTickets.status, 'Open'), eq(maintenanceTickets.status, 'In_Progress'))
+      ));
+
+    let resultTicket;
+
+    if (existingTicket.length > 0) {
+      // Update existing
+      const [updated] = await db.update(maintenanceTickets)
+        .set({ 
+           issueType, 
+           description, 
+           priority: priority || 'Medium',
+           // Don't override active status unless specified
+           status: status || existingTicket[0].status 
+        })
+        .where(eq(maintenanceTickets.id, existingTicket[0].id))
+        .returning();
+      resultTicket = updated;
+    } else {
+      // Create new
+      const [created] = await db.insert(maintenanceTickets).values({
+        roomId: Number(roomId),
+        issueType,
+        description,
+        priority: priority || 'Medium',
+        status: status || 'Open',
+        // Optional: set reportedByUserId if context available
+      }).returning();
+      resultTicket = created;
+    }
+
+    res.json(resultTicket);
+  } catch (error) {
+    console.error('Error upserting maintenance ticket:', error);
+    res.status(500).json({ message: 'Failed to save maintenance ticket' });
   }
 });
 

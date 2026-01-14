@@ -1,12 +1,116 @@
-import { useState } from 'react';
+
+import { useState, useEffect } from 'react';
 import SchedulePromoModal from '../components/SchedulePromoModal';
+import type { CampaignData } from '../components/SchedulePromoModal';
 
 export default function Marketing() {
-  const [isSchedulePromoModalOpen, setIsSchedulePromoModalOpen] = useState(false);
+  const [isPromoModalOpen, setIsPromoModalOpen] = useState(false);
+  const [campaigns, setCampaigns] = useState<CampaignData[]>([]);
+  const [editingCampaign, setEditingCampaign] = useState<CampaignData | null>(null);
+  const [loyaltyMembers, setLoyaltyMembers] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetchCampaigns();
+    fetchLoyaltyMembers();
+    fetchStats();
+  }, []);
+
+  const [stats, setStats] = useState({ totalMembers: 0, newMembersThisWeek: 0 });
+
+  const fetchStats = async () => {
+    try {
+      const response = await fetch('http://localhost:3000/api/marketing/stats');
+      if (response.ok) {
+        const data = await response.json();
+        setStats(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch stats', error);
+    }
+  };
+
+  const fetchLoyaltyMembers = async () => {
+    try {
+      const response = await fetch('http://localhost:3000/api/marketing/loyalty-members');
+      if (response.ok) {
+        const data = await response.json();
+        setLoyaltyMembers(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch loyalty members', error);
+    }
+  };
+
+  const fetchCampaigns = async () => {
+    try {
+      const response = await fetch('http://localhost:3000/api/marketing');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setCampaigns(data);
+      } else {
+        console.error('Expected array of campaigns but got:', data);
+        setCampaigns([]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch campaigns', error);
+      setCampaigns([]);
+    }
+  };
+
+  const handleCreateOrUpdate = async (data: CampaignData) => {
+    try {
+      if (editingCampaign && editingCampaign.id) {
+        // Update
+        await fetch(`http://localhost:3000/api/marketing/${editingCampaign.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+      } else {
+        // Create
+        await fetch('http://localhost:3000/api/marketing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+      }
+      setIsPromoModalOpen(false);
+      setEditingCampaign(null);
+      fetchCampaigns();
+    } catch (error) {
+      console.error('Failed to save campaign', error);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (confirm('Are you sure you want to delete this campaign?')) {
+      try {
+        await fetch(`http://localhost:3000/api/marketing/${id}`, {
+          method: 'DELETE',
+        });
+        fetchCampaigns();
+      } catch (error) {
+        console.error('Failed to delete campaign', error);
+      }
+    }
+  };
+
+  const openCreateModal = () => {
+    setEditingCampaign(null);
+    setIsPromoModalOpen(true);
+  };
+
+  const openEditModal = (campaign: CampaignData) => {
+    setEditingCampaign(campaign);
+    setIsPromoModalOpen(true);
+  };
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
-      {/* KPI Cards */}
+      {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Total Members Card */}
         <div className="relative overflow-hidden rounded-2xl p-6 shadow-xl shadow-blue-900/10 dark:shadow-none">
@@ -22,12 +126,8 @@ export default function Marketing() {
               </span>
             </div>
             <h3 className="text-blue-100 text-sm font-medium uppercase tracking-wide">Total Members</h3>
-            <div className="flex items-baseline gap-2 mt-1">
-              <h2 className="text-4xl font-bold">1,248</h2>
-            </div>
-            <div className="mt-4 flex gap-1 items-center text-sm text-blue-100 opacity-90">
-              <span>32 new members this week</span>
-            </div>
+            <h2 className="text-4xl font-bold mt-1 text-white">{stats.totalMembers.toLocaleString()}</h2>
+            <p className="text-blue-100 text-sm mt-4 opacity-90">{stats.newMembersThisWeek} new members this week</p>
           </div>
         </div>
 
@@ -78,7 +178,7 @@ export default function Marketing() {
         {/* Loyalty Members Table */}
         <div className="lg:col-span-2 glass-card rounded-2xl overflow-hidden flex flex-col">
           <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-700/50 flex items-center justify-between">
-            <h3 className="text-lg font-bold text-slate-800 dark:text-white">Loyalty Members (features coming soon)</h3>
+            <h3 className="text-lg font-bold text-slate-800 dark:text-white">Loyalty Members</h3>
             <button className="text-primary hover:text-blue-700 text-sm font-medium flex items-center gap-1">
               View All <span className="material-icons-round text-base">chevron_right</span>
             </button>
@@ -88,97 +188,48 @@ export default function Marketing() {
               <thead>
                 <tr className="text-xs text-slate-400 uppercase tracking-wider border-b border-gray-100 dark:border-gray-700/50 bg-slate-50/50 dark:bg-slate-800/50">
                   <th className="px-6 py-4 font-medium">Member</th>
-                  <th className="px-6 py-4 font-medium">Tier Status</th>
+                  <th className="px-6 py-4 font-medium">Member ID</th>
                   <th className="px-6 py-4 font-medium">Points Balance</th>
                   <th className="px-6 py-4 font-medium">Last Activity</th>
                   <th className="px-6 py-4 font-medium text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="text-sm divide-y divide-gray-100 dark:divide-gray-700/50">
-                <tr className="group hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300">LQ</div>
-                      <div>
-                        <p className="font-semibold text-slate-700 dark:text-slate-200">Luu, Quang Thuan</p>
-                        <p className="text-xs text-slate-400">ID: #99281</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-yellow-100 to-amber-100 text-amber-800 dark:from-yellow-900 dark:to-amber-900 dark:text-yellow-200 border border-amber-200 dark:border-amber-800">
-                      <span className="material-icons-round text-[10px]">emoji_events</span> Gold
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 font-mono text-slate-600 dark:text-slate-400 font-medium">12,450 pts</td>
-                  <td className="px-6 py-4 text-slate-500 dark:text-slate-400 text-xs">2 days ago</td>
-                  <td className="px-6 py-4 text-right">
-                    <button className="text-slate-400 hover:text-primary transition-colors"><span className="material-icons-round">more_vert</span></button>
-                  </td>
-                </tr>
-                <tr className="group hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300">HM</div>
-                      <div>
-                        <p className="font-semibold text-slate-700 dark:text-slate-200">Han, Thi Hong Han</p>
-                        <p className="text-xs text-slate-400">ID: #82104</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
-                      Silver
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 font-mono text-slate-600 dark:text-slate-400 font-medium">4,200 pts</td>
-                  <td className="px-6 py-4 text-slate-500 dark:text-slate-400 text-xs">1 week ago</td>
-                  <td className="px-6 py-4 text-right">
-                    <button className="text-slate-400 hover:text-primary transition-colors"><span className="material-icons-round">more_vert</span></button>
-                  </td>
-                </tr>
-                <tr className="group hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300">TN</div>
-                      <div>
-                        <p className="font-semibold text-slate-700 dark:text-slate-200">Tran, Ngoc Anh Nhien</p>
-                        <p className="text-xs text-slate-400">ID: #10293</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-purple-100 to-indigo-100 text-purple-800 dark:from-purple-900 dark:to-indigo-900 dark:text-purple-200 border border-purple-200 dark:border-purple-800">
-                      <span className="material-icons-round text-[10px]">diamond</span> Platinum
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 font-mono text-slate-600 dark:text-slate-400 font-medium">48,920 pts</td>
-                  <td className="px-6 py-4 text-slate-500 dark:text-slate-400 text-xs">Just now</td>
-                  <td className="px-6 py-4 text-right">
-                    <button className="text-slate-400 hover:text-primary transition-colors"><span className="material-icons-round">more_vert</span></button>
-                  </td>
-                </tr>
-                <tr className="group hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300">JS</div>
-                      <div>
-                        <p className="font-semibold text-slate-700 dark:text-slate-200">John Smith</p>
-                        <p className="text-xs text-slate-400">ID: #55120</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
-                      Silver
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 font-mono text-slate-600 dark:text-slate-400 font-medium">1,100 pts</td>
-                  <td className="px-6 py-4 text-slate-500 dark:text-slate-400 text-xs">3 months ago</td>
-                  <td className="px-6 py-4 text-right">
-                    <button className="text-slate-400 hover:text-primary transition-colors"><span className="material-icons-round">more_vert</span></button>
-                  </td>
-                </tr>
+                {loyaltyMembers.length > 0 ? (
+                  loyaltyMembers.map((member) => (
+                    <tr key={member.id} className="group hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300">
+                            {member.guestName?.charAt(0) || 'M'}
+                          </div>
+                          <div>
+                            <p className="font-semibold text-slate-700 dark:text-slate-200">{member.guestName || 'Unknown Guest'}</p>
+                            <p className="text-xs text-slate-400">ID: #{member.memberId}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 dark:from-blue-900 dark:to-indigo-900 dark:text-blue-200 border border-blue-200 dark:border-blue-800">
+                          <span className="material-icons-round text-[10px]">card_membership</span> {member.memberId}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 font-mono text-slate-600 dark:text-slate-400 font-medium">{member.pointsBalance} pts</td>
+                      <td className="px-6 py-4 text-slate-500 dark:text-slate-400 text-xs">
+                        {member.lastActivity ? new Date(member.lastActivity).toLocaleDateString() : 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <button className="text-slate-400 hover:text-primary transition-colors"><span className="material-icons-round">more_vert</span></button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-8 text-center text-slate-500 text-sm">
+                      No loyalty members found.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -192,57 +243,53 @@ export default function Marketing() {
               <span className="material-icons-round">tune</span>
             </button>
           </div>
-          <div className="space-y-4 flex-1 overflow-y-auto pr-2">
-            <div className="p-4 rounded-xl border border-gray-100 dark:border-gray-700 bg-white dark:bg-slate-800/50 hover:shadow-md transition-all group">
-              <div className="flex justify-between items-start mb-2">
-                <div className="p-2 rounded-lg bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400">
-                  <span className="material-icons-round text-lg">local_offer</span>
+          <div className="space-y-4 flex-1 overflow-y-auto custom-scrollbar pr-2">
+            
+            {Array.isArray(campaigns) && campaigns.length > 0 ? (
+              campaigns.map((campaign) => (
+              <div key={campaign.id} className="p-4 rounded-xl border border-gray-100 dark:border-gray-700 bg-white dark:bg-slate-800/50 hover:shadow-md transition-all group relative">
+                <div className="flex justify-between items-start mb-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-green-600 bg-green-100 dark:text-green-400 dark:bg-green-900/30 px-2 py-0.5 rounded-full">
+                    {campaign.status}
+                  </span>
+                  
+                  {/* Action Buttons */}
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => openEditModal(campaign)}
+                      className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-primary transition-all"
+                      title="Edit"
+                    >
+                      <span className="material-icons-round text-sm">edit</span>
+                    </button>
+                    <button 
+                      onClick={() => handleDelete(campaign.id!)}
+                      className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-red-500 transition-all"
+                      title="Delete"
+                    >
+                      <span className="material-icons-round text-sm">delete</span>
+                    </button>
+                  </div>
                 </div>
-                <span className="text-[10px] font-bold uppercase tracking-wide text-green-600 bg-green-100 dark:text-green-400 dark:bg-green-900/30 px-2 py-0.5 rounded-full">Active</span>
-              </div>
-              <h4 className="font-semibold text-slate-800 dark:text-white mb-1">Summer Early Bird</h4>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">20% off for bookings &gt; 3 nights.</p>
-              <div className="space-y-1">
-                <div className="flex justify-between text-xs font-medium text-slate-600 dark:text-slate-300">
-                  <span>Redemptions</span>
-                  <span>45 / 100</span>
-                </div>
-                <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                  <div className="h-full bg-primary w-[45%] rounded-full"></div>
-                </div>
-              </div>
-              <div className="mt-3 pt-3 border-t border-gray-50 dark:border-gray-700/50 flex justify-between text-xs text-slate-400">
-                <span>Ends: Aug 31</span>
-                <span className="group-hover:text-primary transition-colors cursor-pointer font-medium">Manage</span>
-              </div>
-            </div>
-
-            <div className="p-4 rounded-xl border border-gray-100 dark:border-gray-700 bg-white dark:bg-slate-800/50 hover:shadow-md transition-all group">
-              <div className="flex justify-between items-start mb-2">
-                <div className="p-2 rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
-                  <span className="material-icons-round text-lg">card_membership</span>
-                </div>
-                <span className="text-[10px] font-bold uppercase tracking-wide text-green-600 bg-green-100 dark:text-green-400 dark:bg-green-900/30 px-2 py-0.5 rounded-full">Active</span>
-              </div>
-              <h4 className="font-semibold text-slate-800 dark:text-white mb-1">Loyalty Upgrade</h4>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Double points for Gold members.</p>
-              <div className="space-y-1">
-                <div className="flex justify-between text-xs font-medium text-slate-600 dark:text-slate-300">
-                  <span>Participation</span>
-                  <span>128 Users</span>
-                </div>
-                <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                  <div className="h-full bg-secondary w-[75%] rounded-full"></div>
+                
+                <h4 className="font-semibold text-slate-800 dark:text-white mb-1">{campaign.name}</h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">{campaign.discountDetails}</p>
+                <p className="text-xs text-slate-400 mb-3 line-clamp-2">{campaign.description}</p>
+                
+                <div className="mt-3 pt-3 border-t border-gray-50 dark:border-gray-700/50 flex justify-between text-xs text-slate-400">
+                  <span>Ends: {new Date(campaign.endDate).toLocaleDateString()}</span>
+                  <span className="text-slate-500">{campaign.targetAudience}</span>
                 </div>
               </div>
-              <div className="mt-3 pt-3 border-t border-gray-50 dark:border-gray-700/50 flex justify-between text-xs text-slate-400">
-                <span>Ends: Oct 15</span>
-                <span className="group-hover:text-primary transition-colors cursor-pointer font-medium">Manage</span>
+            ))
+            ) : (
+              <div className="text-center py-8 text-slate-500 text-sm">
+                No active campaigns found. Check backend connection.
               </div>
-            </div>
+            )}
 
             <div 
-              onClick={() => setIsSchedulePromoModalOpen(true)}
+              onClick={openCreateModal}
               className="p-4 rounded-xl border border-dashed border-gray-300 dark:border-gray-600 bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-all cursor-pointer group flex flex-col items-center justify-center text-center py-6"
             >
               <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-400 mb-2 group-hover:text-primary group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20 transition-colors">
@@ -255,8 +302,13 @@ export default function Marketing() {
       </div>
       
       <SchedulePromoModal 
-        isOpen={isSchedulePromoModalOpen} 
-        onClose={() => setIsSchedulePromoModalOpen(false)} 
+        isOpen={isPromoModalOpen} 
+        onClose={() => {
+          setIsPromoModalOpen(false);
+          setEditingCampaign(null);
+        }}
+        onSubmit={handleCreateOrUpdate}
+        initialData={editingCampaign}
       />
     </div>
   );

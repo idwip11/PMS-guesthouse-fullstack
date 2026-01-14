@@ -34,27 +34,38 @@ export interface Reservation {
   guestId: string;
   roomId: string;
   orderId: string;
+  memberId?: string;
   checkInDate: string;
   checkOutDate: string;
   status: 'Confirmed' | 'Checked_In' | 'Checked_Out' | 'Cancelled';
   source: string | null;
   guestCount: number;
   specialRequest: string | null;
+  notes: string | null;
   isReconciled: boolean;
   hasBreakfast: boolean;
   hasExtrabed: boolean;
   hasLateCheckout: boolean;
   hasLaundry: boolean;
+  breakfastCost?: string;
+  laundryCost?: string;
+  massageCost?: string;
   totalAmount: string;
   createdAt: string;
+  guestName?: string;
+  roomNumber?: string;
+  roomType?: string;
 }
 
 export interface Payment {
   id: string;
   reservationId: string;
+  orderId?: string | null; // Denormalized for easier querying
   amount: string;
   paymentDate: string;
   paymentMethod: string | null;
+  notes: string | null;
+  type: string;
   status: 'Paid' | 'Pending' | 'Failed';
   createdAt: string;
 }
@@ -66,6 +77,7 @@ export interface Expense {
   category: string;
   amount: string;
   dateIncurred: string;
+  notes?: string | null;
   status: 'Pending' | 'Approved' | 'Rejected';
   receiptUrl: string | null;
   createdAt: string;

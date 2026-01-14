@@ -8,17 +8,20 @@ export interface Room {
   status: RoomStatus;
 }
 
-export type BookingStatus = 'CheckedIn' | 'Confirmed' | 'DueOut' | 'Maintenance';
+export type BookingStatus = 'CheckedIn' | 'Confirmed' | 'DueOut' | 'Maintenance' | 'Cancelled';
 
 export interface Booking {
   id: string;
   roomId: string;
   guestName: string;
   status: BookingStatus;
+  paymentStatus?: 'Unpaid' | 'Deposit Paid' | 'Fully Paid';
+  paidAmount?: number;
   startDay: number; // For this mock, we'll use day of the month (1-30)
   length: number; // Nights
   avatarUrl?: string;
   details?: string; // e.g., "Group: Tech Corp" or "VIP"
+  isReconciled?: boolean;
 }
 
 // Generate the specific rooms requested

@@ -10,6 +10,15 @@ interface BookingBlockProps {
 
 const BookingBlock = ({ booking, style, onClick }: BookingBlockProps) => {
   const getStatusStyles = (status: Booking['status']) => {
+    // Priority: Cancelled Status
+    if (status === 'Cancelled') return 'bg-red-900/90 text-red-100 border-red-950 shadow-none opacity-70';
+
+    // Priority: Payment Status Coloring
+    if (booking.paymentStatus === 'Fully Paid') return 'bg-blue-600 text-white shadow-blue-500/20';
+    if (booking.paymentStatus === 'Deposit Paid') return 'bg-[#ffc8aa] text-[#8a4b29] shadow-orange-500/20'; // Custom yellow/orange for DP
+    if (booking.paymentStatus === 'Unpaid') return 'bg-red-500 text-white shadow-red-500/20';
+
+    // Fallback based on Reservation Status
     switch (status) {
       case 'CheckedIn':
         return 'bg-primary hover:bg-blue-700 text-white shadow-blue-500/20';
@@ -51,7 +60,14 @@ const BookingBlock = ({ booking, style, onClick }: BookingBlockProps) => {
       )}
 
       <div className="flex flex-col min-w-0">
-        <span className="text-xs font-bold truncate">{booking.guestName}</span>
+        <div className="flex items-center gap-1">
+          <span className="text-xs font-bold truncate">
+            {booking.guestName}
+          </span>
+          {booking.isReconciled && (
+            <span className="material-icons-round text-[16px] text-yellow-300 drop-shadow-sm flex-shrink-0" title="Reconciled">star</span>
+          )}
+        </div>
         {booking.details && (
           <span className="text-[10px] opacity-80 leading-none mt-0.5 truncate">
             {booking.details}

@@ -42,6 +42,7 @@ export const reservations = pgTable('reservations', {
   orderId: text('order_id').notNull().unique(), // Booking Ref
   checkInDate: date('check_in_date').notNull(),
   checkOutDate: date('check_out_date').notNull(),
+  memberId: text('member_id'), // Linked Member ID (optional)
   status: text('status').notNull().default('Confirmed'), // Confirmed, Checked_In, Checked_Out, Cancelled
   source: text('source'), // Booking.com, Walk-in, Agoda
   guestCount: integer('guest_count').default(1),
@@ -51,6 +52,9 @@ export const reservations = pgTable('reservations', {
   hasExtrabed: boolean('has_extrabed').default(false),
   hasLateCheckout: boolean('has_late_checkout').default(false),
   hasLaundry: boolean('has_laundry').default(false),
+  breakfastCost: decimal('breakfast_cost', { precision: 10, scale: 2 }).default('0'),
+  laundryCost: decimal('laundry_cost', { precision: 10, scale: 2 }).default('0'),
+  massageCost: decimal('massage_cost', { precision: 10, scale: 2 }).default('0'),
   totalAmount: decimal('total_amount', { precision: 10, scale: 2 }).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
@@ -59,9 +63,12 @@ export const reservations = pgTable('reservations', {
 export const payments = pgTable('payments', {
   id: uuid('id').defaultRandom().primaryKey(),
   reservationId: uuid('reservation_id').references(() => reservations.id).notNull(),
+  orderId: text('order_id'), // Denormalized for easier querying
   amount: decimal('amount', { precision: 10, scale: 2 }).notNull(),
   paymentDate: date('payment_date').defaultNow().notNull(),
   paymentMethod: text('payment_method'), // Cash, Credit Card, Transfer
+  notes: text('notes'), // Optional note for the payment
+  type: text('type').default('Payment'), // DP, Additional Charges, Completed
   status: text('status').default('Pending'), // Paid, Pending, Failed
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
@@ -70,6 +77,7 @@ export const payments = pgTable('payments', {
 export const invoiceItems = pgTable('invoice_items', {
   id: uuid('id').defaultRandom().primaryKey(),
   reservationId: uuid('reservation_id').references(() => reservations.id).notNull(),
+  orderId: text('order_id'), // Denormalized for easier querying
   itemName: text('item_name').notNull(),
   amount: decimal('amount', { precision: 10, scale: 2 }).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -83,6 +91,7 @@ export const expenses = pgTable('expenses', {
   category: text('category').notNull(), // Maintenance, Supplies, Utilities
   amount: decimal('amount', { precision: 10, scale: 2 }).notNull(),
   dateIncurred: date('date_incurred').notNull(),
+  notes: text('notes'), // Additional details
   status: text('status').default('Pending'), // Pending, Approved, Rejected
   receiptUrl: text('receipt_url'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -139,5 +148,39 @@ export const taskAssignees = pgTable('task_assignees', {
   id: uuid('id').defaultRandom().primaryKey(),
   taskId: uuid('task_id').references(() => cleaningTasks.id, { onDelete: 'cascade' }).notNull(),
   userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+});
+
+// Operations: Financial Targets
+export const financialTargets = pgTable('financial_targets', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  month: integer('month').notNull(), // 1-12
+  year: integer('year').notNull(),
+  targetAmount: decimal('target_amount', { precision: 15, scale: 2 }).notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// Marketing: Campaigns
+export const marketingCampaigns = pgTable('marketing_campaigns', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull(),
+  code: text('code'),
+  description: text('description'), // Terms & Conditions
+  memberId: text('member_id'), // Linked Member ID (optional)
+  discountDetails: text('discount_details').notNull(), // Benefit/Discount
+  targetAudience: text('target_audience').default('All Guests'),
+  startDate: date('start_date').notNull(),
+  endDate: date('end_date').notNull(),
+  status: text('status').default('Active'), // Active, Scheduled, Ended
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// Loyalty Members Table
+export const loyaltyMembers = pgTable('loyalty_members', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  orderId: text('order_id').notNull(), // Links to reservation's order_id (text)
+  memberId: text('member_id').unique().notNull(), // The manual ID, e.g., GOLD-123
+  pointsBalance: integer('points_balance').default(0),
+  joinedAt: timestamp('joined_at').defaultNow().notNull(),
+  lastActivity: timestamp('last_activity').defaultNow(),
 });
 

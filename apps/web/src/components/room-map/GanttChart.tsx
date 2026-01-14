@@ -1,17 +1,28 @@
-import React, { useState } from 'react';
-import BookingDetailsModal from '../BookingDetailsModal';
+import React from 'react';
 import BookingBlock from './BookingBlock';
-import { rooms, bookings } from './data';
-import type { RoomStatus } from './data';
+import type { RoomStatus, Room, Booking } from './data';
 import clsx from 'clsx';
 
 const COL_WIDTH = 100; // Width of each day column in px
 const SIDEBAR_WIDTH = 220; // Width of room sidebar
 
-const GanttChart = () => {
-    const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
-  // Generate days array (just numbers 1-30 for this mock)
-  const days = Array.from({ length: 30 }, (_, i) => i + 1);
+interface CalendarDay {
+  day: number;
+  date: Date;
+  dayOfWeek: string;
+  isToday: boolean;
+  isWeekend: boolean;
+}
+
+interface GanttChartProps {
+  rooms?: Room[];
+  days?: CalendarDay[];
+  bookings?: Booking[];
+  onBookingClick?: (booking: Booking) => void;
+}
+
+const GanttChart = ({ rooms = [], days = [], bookings = [], onBookingClick }: GanttChartProps) => {
+    // const [isBookingModalOpen, setIsBookingModalOpen] = useState(false); // Moved to parent
 
   const getStatusBadge = (status: RoomStatus) => {
     switch (status) {
@@ -38,24 +49,26 @@ const GanttChart = () => {
             <span>Room / Type</span>
           </div>
           
-          {days.map((day) => (
-            <div key={`header-${day}`} className={clsx(
+          {days.map((dayInfo) => (
+            <div key={`header-${dayInfo.day}`} className={clsx(
                 "sticky top-0 z-20 border-b border-r border-slate-100 p-2 text-center h-20 flex flex-col justify-center",
-                day === 3 ? "bg-blue-50/80 backdrop-blur-sm border-blue-100" : "bg-white/95 backdrop-blur-sm"
+                dayInfo.isToday ? "bg-blue-50/80 backdrop-blur-sm border-blue-100" : "bg-white/95 backdrop-blur-sm"
             )}>
               <div className={clsx(
                   "text-[10px] uppercase font-bold tracking-wider mb-1",
-                  day === 3 ? "text-primary" : "text-slate-400"
+                  dayInfo.isToday ? "text-primary" : 
+                  dayInfo.isWeekend ? "text-red-500" : "text-slate-400"
               )}>
-                {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][day % 7]}
+                {dayInfo.dayOfWeek}
               </div>
               <div className={clsx(
                   "text-lg font-bold",
-                  day === 3 ? "text-primary" : "text-slate-800"
+                  dayInfo.isToday ? "text-primary" : 
+                  dayInfo.isWeekend ? "text-red-500" : "text-slate-800"
               )}>
-                {day.toString().padStart(2, '0')}
+                {dayInfo.day.toString().padStart(2, '0')}
               </div>
-               {day === 3 && <span className="text-[9px] font-medium text-primary bg-blue-100 px-1.5 rounded-full mt-1">Today</span>}
+               {dayInfo.isToday && <span className="text-[9px] font-medium text-primary bg-blue-100 px-1.5 rounded-full mt-1">Today</span>}
             </div>
           ))}
 
@@ -77,14 +90,14 @@ const GanttChart = () => {
                     </div>
 
                     {/* Day Cells for this Room */}
-                    {days.map((day) => (
-                        <div key={`cell-${room.id}-${day}`} className={clsx(
+                    {days.map((dayInfo) => (
+                        <div key={`cell-${room.id}-${dayInfo.day}`} className={clsx(
                             "border-b border-slate-50 h-24 relative",
-                            day === 3 ? "bg-blue-50/30" : (day % 2 === 0 ? "bg-white" : "bg-slate-50/30") // subtle zeebra stripe
+                            dayInfo.isToday ? "bg-blue-50/30" : (dayInfo.day % 2 === 0 ? "bg-white" : "bg-slate-50/30")
                         )}>
                             {/* Check if a booking starts here */}
                             {roomBookings.map(booking => {
-                                if (booking.startDay === day) {
+                                if (booking.startDay === dayInfo.day) {
                                     return (
                                         <BookingBlock 
                                             key={booking.id} 
@@ -94,9 +107,7 @@ const GanttChart = () => {
                                                 width: `${booking.length * 100 - 8}px` 
                                             }}
                                             onClick={() => {
-                                                if (booking.guestName === 'Mr. Andi Wijaya') {
-                                                    setIsBookingModalOpen(true);
-                                                }
+                                                onBookingClick?.(booking);
                                             }}
                                         />
                                     );
@@ -112,10 +123,7 @@ const GanttChart = () => {
       </div>
 
       
-      <BookingDetailsModal 
-        isOpen={isBookingModalOpen} 
-        onClose={() => setIsBookingModalOpen(false)} 
-      />
+
     </div>
   );
 };

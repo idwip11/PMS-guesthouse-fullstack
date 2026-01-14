@@ -19,13 +19,25 @@ ChartJS.register(
   Legend
 );
 
-const FinanceChart = () => {
-  const data = {
-    labels: ['May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'],
+interface FinanceChartProps {
+  data?: {
+    name: string; // Month label
+    income: number;
+    expense: number;
+  }[];
+}
+
+const FinanceChart = ({ data }: FinanceChartProps) => {
+  const labels = data?.map(d => d.name) || ['May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'];
+  const incomeData = data?.map(d => d.income) || [];
+  const expenseData = data?.map(d => d.expense) || [];
+
+  const chartData = {
+    labels,
     datasets: [
       {
         label: 'Income',
-        data: [12000, 19000, 3000, 5000, 20000, 35000],
+        data: incomeData,
         backgroundColor: '#2563EB',
         borderRadius: 4,
         barPercentage: 0.6,
@@ -33,7 +45,7 @@ const FinanceChart = () => {
       },
       {
         label: 'Expenses',
-        data: [8000, 12000, 2000, 3000, 15000, 12000],
+        data: expenseData,
         backgroundColor: '#94a3b8',
         borderRadius: 4,
         barPercentage: 0.6,
@@ -62,6 +74,18 @@ const FinanceChart = () => {
         padding: 10,
         cornerRadius: 8,
         displayColors: true,
+        callbacks: {
+            label: function(context: any) {
+                let label = context.dataset.label || '';
+                if (label) {
+                    label += ': ';
+                }
+                if (context.parsed.y !== null) {
+                    label += new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(context.parsed.y);
+                }
+                return label;
+            }
+        }
       }
     },
     scales: {
@@ -74,7 +98,9 @@ const FinanceChart = () => {
         ticks: {
           color: '#94a3b8',
           callback: function(value: any) {
-            return '$' + value / 1000 + 'k';
+            if (value >= 1000000) return (value / 1000000).toFixed(1) + 'M';
+            if (value >= 1000) return (value / 1000).toFixed(0) + 'k';
+            return value;
           }
         }
       },
@@ -91,7 +117,9 @@ const FinanceChart = () => {
 
   return (
     <div className="flex-1 w-full relative h-[250px]">
-      <Bar options={options} data={data} />
+      <div className="absolute inset-0">
+        <Bar options={options} data={chartData} />
+      </div>
     </div>
   );
 };

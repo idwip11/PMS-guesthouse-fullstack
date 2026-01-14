@@ -1,5 +1,6 @@
 
 import express from 'express';
+import path from 'path';
 import cors from 'cors';
 import helmet from 'helmet';
 import * as dotenv from 'dotenv';
@@ -17,6 +18,9 @@ import maintenanceRouter from './routes/maintenance';
 import shiftsRouter from './routes/shifts';
 import authRouter from './routes/auth';
 import cleaningTasksRouter from './routes/cleaningTasks';
+import financeRouter from './routes/finance';
+import marketingRouter from './routes/marketing';
+import uploadRouter from './routes/upload';
 
 dotenv.config();
 
@@ -53,6 +57,13 @@ app.use('/api/inventory', inventoryRouter);
 app.use('/api/maintenance', maintenanceRouter);
 app.use('/api/shifts', shiftsRouter);
 app.use('/api/cleaning-tasks', cleaningTasksRouter);
+app.use('/api/finance', financeRouter);
+app.use('/api/finance', financeRouter);
+app.use('/api/marketing', marketingRouter);
+app.use('/api/upload', uploadRouter);
+
+// Serve uploaded files statically
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 app.listen(port, () => {
   console.log(`Server is running at http://localhost:${port}`);

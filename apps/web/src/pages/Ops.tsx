@@ -3,8 +3,8 @@ import OpsChart from '../components/OpsChart';
 import InventorySetupModal from '../components/InventorySetupModal';
 import ReportIssueModal from '../components/ReportIssueModal';
 import StaffRosterModal from '../components/StaffRosterModal';
-import { expensesApi, inventoryApi, maintenanceApi, roomsApi } from '../services/api';
-import type { Expense, InventoryItem, MaintenanceTicket, Room } from '../types';
+import { expensesApi, inventoryApi, maintenanceApi, roomsApi, shiftsApi, usersApi } from '../services/api';
+import type { Expense, InventoryItem, MaintenanceTicket, Room, Shift, User } from '../types';
 
 export default function Ops() {
   const [isInventorySetupModalOpen, setIsInventorySetupModalOpen] = useState(false);
@@ -16,41 +16,83 @@ export default function Ops() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [maintenance, setMaintenance] = useState<MaintenanceTicket[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [shifts, setShifts] = useState<Shift[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Local state for room maintenance worksheet
+  const [maintenanceRows, setMaintenanceRows] = useState<{
+    roomId: number;
+    roomNumber: string;
+    issue: string;
+    priority: string;
+    notes: string;
+    isSaved?: boolean;
+  }[]>([]);
+
+  const fetchData = async () => {
+    try {
+      const [expensesData, inventoryData, maintenanceData, roomsData, shiftsData, usersData] = await Promise.all([
+        expensesApi.getAll(),
+        inventoryApi.getAll(),
+        maintenanceApi.getAll(),
+        roomsApi.getAll(),
+        shiftsApi.getAll(),
+        usersApi.getAll(),
+      ]);
+      setExpenses(expensesData);
+      setInventory(inventoryData);
+      setMaintenance(maintenanceData);
+      setRooms(roomsData);
+      setShifts(shiftsData);
+      setUsers(usersData);
+    } catch (error) {
+      console.error('Failed to fetch ops data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Fetch data on mount
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [expensesData, inventoryData, maintenanceData, roomsData] = await Promise.all([
-          expensesApi.getAll(),
-          inventoryApi.getAll(),
-          maintenanceApi.getAll(),
-          roomsApi.getAll(),
-        ]);
-        setExpenses(expensesData);
-        setInventory(inventoryData);
-        setMaintenance(maintenanceData);
-        setRooms(roomsData);
-      } catch (error) {
-        console.error('Failed to fetch ops data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchData();
   }, []);
+
+
+  // Initialize maintenance worksheet from rooms with 'Maintenance' status
+  // Initialize maintenance worksheet from rooms with 'Maintenance' status, merged with active tickets
+  useEffect(() => {
+    if (rooms.length > 0) {
+      const rows = rooms
+        .filter(r => r.status === 'Maintenance')
+        .map(r => {
+           // Find existing active ticket for this room
+           const activeTicket = maintenance.find(t => 
+             String(t.roomId) === String(r.id) && 
+             (t.status === 'Open' || t.status === 'In_Progress')
+           );
+
+           return {
+            roomId: r.id,
+            roomNumber: r.roomNumber,
+            issue: activeTicket?.issueType || '',
+            priority: activeTicket?.priority || '',
+            notes: activeTicket?.description || '',
+            isSaved: !!activeTicket // Mark as saved if ticket exists
+          };
+        });
+      setMaintenanceRows(rows);
+    }
+  }, [rooms, maintenance]);
 
   // Computed values
   const totalMonthlyExpenses = expenses.reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
   const lowStockItems = inventory.filter(item => item.currentStock < item.minThreshold);
   const openMaintenanceTickets = maintenance.filter(m => m.status !== 'Resolved');
 
-  // Get room number by ID
-  const getRoomNumber = (roomId: string) => {
-    const room = rooms.find(r => r.id === roomId);
-    return room?.roomNumber || 'N/A';
-  };
+  // Filter shifts for today
+  const todaysDateStr = new Date().toISOString().split('T')[0];
+  const todaysShifts = shifts.filter(s => s.shiftDate.startsWith(todaysDateStr));
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
@@ -71,10 +113,10 @@ export default function Ops() {
             </div>
             <h3 className="text-rose-100 text-sm font-medium uppercase tracking-wide">Monthly OpEx</h3>
             <div className="flex items-baseline gap-2 mt-1">
-              <h2 className="text-4xl font-bold">${loading ? '...' : totalMonthlyExpenses.toLocaleString()}</h2>
+              <h2 className="text-4xl font-bold">Rp {loading ? '...' : totalMonthlyExpenses.toLocaleString('id-ID')}</h2>
             </div>
             <div className="mt-4 flex items-center justify-between text-xs text-rose-100 opacity-90">
-              <span>Budget: $10,000</span>
+              <span>Budget: Rp 150.000.000</span>
               <span>82% Used</span>
             </div>
             <div className="mt-1 h-1.5 w-full bg-red-900/30 rounded-full overflow-hidden">
@@ -233,59 +275,84 @@ export default function Ops() {
                 <th className="px-6 py-4 font-medium">Logged By</th>
                 <th className="px-6 py-4 font-medium">Date</th>
                 <th className="px-6 py-4 font-medium">Amount</th>
-                <th className="px-6 py-4 font-medium">Status</th>
                 <th className="px-6 py-4 font-medium text-right">Action</th>
               </tr>
             </thead>
             <tbody className="text-sm divide-y divide-gray-100 dark:divide-gray-700/50">
-              <tr className="group hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors">
-                <td className="px-6 py-4 font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-3">
-                  <div className="p-2 bg-blue-100 dark:bg-blue-900/50 text-primary rounded-lg">
-                    <span className="material-icons-round text-base">plumbing</span>
-                  </div>
-                  Pipe Repair Room 204
-                </td>
-                <td className="px-6 py-4 text-slate-600 dark:text-slate-400">Maintenance</td>
-                <td className="px-6 py-4 text-slate-600 dark:text-slate-400">Mike R.</td>
-                <td className="px-6 py-4 text-slate-600 dark:text-slate-400 font-mono">Oct 24, 2023</td>
-                <td className="px-6 py-4 font-bold text-slate-800 dark:text-white">$150.00</td>
-                <td className="px-6 py-4"><span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">Approved</span></td>
-                <td className="px-6 py-4 text-right">
-                  <button className="text-slate-400 hover:text-primary transition-colors"><span className="material-icons-round">more_vert</span></button>
-                </td>
-              </tr>
-              <tr className="group hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors">
-                <td className="px-6 py-4 font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-3">
-                  <div className="p-2 bg-amber-100 dark:bg-amber-900/50 text-amber-600 rounded-lg">
-                    <span className="material-icons-round text-base">local_laundry_service</span>
-                  </div>
-                  Bulk Laundry Detergent
-                </td>
-                <td className="px-6 py-4 text-slate-600 dark:text-slate-400">Supplies</td>
-                <td className="px-6 py-4 text-slate-600 dark:text-slate-400">Sarah J.</td>
-                <td className="px-6 py-4 text-slate-600 dark:text-slate-400 font-mono">Oct 23, 2023</td>
-                <td className="px-6 py-4 font-bold text-slate-800 dark:text-white">$450.00</td>
-                <td className="px-6 py-4"><span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">Approved</span></td>
-                <td className="px-6 py-4 text-right">
-                  <button className="text-slate-400 hover:text-primary transition-colors"><span className="material-icons-round">more_vert</span></button>
-                </td>
-              </tr>
-              <tr className="group hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors">
-                <td className="px-6 py-4 font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-3">
-                  <div className="p-2 bg-purple-100 dark:bg-purple-900/50 text-purple-600 rounded-lg">
-                    <span className="material-icons-round text-base">wifi</span>
-                  </div>
-                  Router Replacement
-                </td>
-                <td className="px-6 py-4 text-slate-600 dark:text-slate-400">IT / Utilities</td>
-                <td className="px-6 py-4 text-slate-600 dark:text-slate-400">David K.</td>
-                <td className="px-6 py-4 text-slate-600 dark:text-slate-400 font-mono">Oct 22, 2023</td>
-                <td className="px-6 py-4 font-bold text-slate-800 dark:text-white">$89.99</td>
-                <td className="px-6 py-4"><span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">Pending</span></td>
-                <td className="px-6 py-4 text-right">
-                  <button className="text-slate-400 hover:text-primary transition-colors"><span className="material-icons-round">more_vert</span></button>
-                </td>
-              </tr>
+              {expenses.length > 0 ? (
+                expenses
+                  .sort((a, b) => new Date(b.dateIncurred).getTime() - new Date(a.dateIncurred).getTime())
+                  .slice(0, 10)
+                  .map((expense) => {
+                    const loggedByUser = users.find(u => u.id === expense.loggedByUserId);
+                    const formattedDate = new Date(expense.dateIncurred).toLocaleDateString('en-US', { 
+                      year: 'numeric', 
+                      month: 'short', 
+                      day: 'numeric' 
+                    });
+                    
+                    const categoryIcons: Record<string, { icon: string, color: string }> = {
+                      'Repairs & Maintenance': { icon: 'plumbing', color: 'blue' },
+                      'Maintenance': { icon: 'build', color: 'blue' },
+                      'Utilities': { icon: 'wifi', color: 'purple' },
+                      'Supplies & Inventory': { icon: 'local_laundry_service', color: 'amber' },
+                      'IT & Software': { icon: 'computer', color: 'indigo' },
+                      'Staff & Labor': { icon: 'group', color: 'green' },
+                      'Marketing': { icon: 'campaign', color: 'pink' },
+                      'Other': { icon: 'receipt', color: 'gray' },
+                    };
+                    
+                    const categoryInfo = categoryIcons[expense.category] || categoryIcons['Other'];
+                    
+                    return (
+                      <tr key={expense.id} className="group hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors">
+                        <td className="px-6 py-4 font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-3">
+                          <div className={`p-2 bg-${categoryInfo.color}-100 dark:bg-${categoryInfo.color}-900/50 text-${categoryInfo.color}-600 rounded-lg`}>
+                            <span className="material-icons-round text-base">{categoryInfo.icon}</span>
+                          </div>
+                          <div>
+                            <div>{expense.description}</div>
+                            {expense.notes && (
+                              <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 italic">{expense.notes}</div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{expense.category}</td>
+                        <td className="px-6 py-4 text-slate-600 dark:text-slate-400">
+                          {loggedByUser ? loggedByUser.fullName : 'Unknown'}
+                        </td>
+                        <td className="px-6 py-4 text-slate-600 dark:text-slate-400 font-mono">{formattedDate}</td>
+                        <td className="px-6 py-4 font-bold text-slate-800 dark:text-white">
+                          Rp {parseFloat(expense.amount).toLocaleString('id-ID', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {expense.receiptUrl && (
+                              <a
+                                href={`http://localhost:3000${expense.receiptUrl}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-primary hover:text-blue-700 transition-colors"
+                                title="View Receipt"
+                              >
+                                <span className="material-icons-round text-lg">receipt</span>
+                              </a>
+                            )}
+                            <button className="text-slate-400 hover:text-primary transition-colors">
+                              <span className="material-icons-round">more_vert</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+              ) : (
+                <tr>
+                  <td colSpan={7} className="px-6 py-8 text-center text-slate-400 text-sm">
+                    No expenses recorded yet. Click "Log Expense" to add one.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -304,36 +371,42 @@ export default function Ops() {
                </button>
             </div>
              <div className="space-y-4">
-               <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
-                 <div className="flex items-center gap-3">
-                   <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-primary font-bold">JD</div>
-                   <div>
-                     <p className="text-sm font-semibold text-slate-800 dark:text-white">John Doe</p>
-                     <p className="text-xs text-slate-500">Front Desk • 08:00 - 16:00</p>
-                   </div>
+               {todaysShifts.length > 0 ? (
+                 todaysShifts.map(shift => {
+                   const user = users.find(u => u.id === shift.userId);
+                   if (!user) return null;
+                   
+                   // Colors based on shift type
+                   let badgeColor = 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300';
+                   let avatarColor = 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400';
+                   
+                   if (shift.shiftType === 'Evening') {
+                      badgeColor = 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300';
+                      avatarColor = 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400';
+                   }
+
+                   return (
+                     <div key={shift.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                       <div className="flex items-center gap-3">
+                         <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${avatarColor}`}>
+                           {user.fullName.charAt(0)}
+                         </div>
+                         <div>
+                           <p className="text-sm font-semibold text-slate-800 dark:text-white">{user.fullName}</p>
+                           <p className="text-xs text-slate-500">{user.role} • {shift.startTime.slice(0,5)} - {shift.endTime.slice(0,5)}</p>
+                         </div>
+                       </div>
+                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${badgeColor}`}>
+                         {shift.status === 'Scheduled' ? 'On Duty' : shift.status}
+                       </span>
+                     </div>
+                   );
+                 })
+               ) : (
+                 <div className="text-center py-8 text-slate-400 text-sm">
+                   No shifts scheduled for today.
                  </div>
-                 <span className="px-2 py-1 rounded-full bg-green-100 text-green-700 text-xs font-medium dark:bg-green-900/30 dark:text-green-300">On Duty</span>
-               </div>
-                <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
-                 <div className="flex items-center gap-3">
-                   <div className="w-10 h-10 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-purple-600 font-bold">AS</div>
-                   <div>
-                     <p className="text-sm font-semibold text-slate-800 dark:text-white">Alice Smith</p>
-                     <p className="text-xs text-slate-500">Housekeeping • 09:00 - 17:00</p>
-                   </div>
-                 </div>
-                 <span className="px-2 py-1 rounded-full bg-green-100 text-green-700 text-xs font-medium dark:bg-green-900/30 dark:text-green-300">On Duty</span>
-               </div>
-                <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
-                 <div className="flex items-center gap-3">
-                   <div className="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600 font-bold">RK</div>
-                   <div>
-                     <p className="text-sm font-semibold text-slate-800 dark:text-white">Robert King</p>
-                     <p className="text-xs text-slate-500">Maintenance • 13:00 - 21:00</p>
-                   </div>
-                 </div>
-                 <span className="px-2 py-1 rounded-full bg-slate-200 text-slate-600 text-xs font-medium dark:bg-slate-700 dark:text-slate-400">Scheduled</span>
-               </div>
+               )}
              </div>
           </div>
 
@@ -356,25 +429,126 @@ export default function Ops() {
                     <th className="px-4 py-3 font-medium">Issue</th>
                     <th className="px-4 py-3 font-medium">Priority</th>
                     <th className="px-4 py-3 font-medium">Notes</th>
+                    <th className="px-4 py-3 font-medium text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="text-sm divide-y divide-gray-100 dark:divide-gray-700/50">
-                  {openMaintenanceTickets.map((ticket) => (
-                    <tr key={ticket.id} className="group hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                      <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-200">{getRoomNumber(ticket.roomId)}</td>
-                      <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{ticket.issueType}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                          ticket.priority === 'High' || ticket.priority === 'Critical' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-                          ticket.priority === 'Medium' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
-                          'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400'
-                        }`}>
-                          {ticket.priority}
-                        </span>
+                  {maintenanceRows.length > 0 ? (
+                    maintenanceRows.map((row, index) => (
+                      <tr key={row.roomId} className="group hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-200">{row.roomNumber}</td>
+                        <td className="px-4 py-3">
+                          <input 
+                            type="text" 
+                            className="w-full bg-transparent border-none focus:ring-0 text-slate-600 dark:text-slate-400 placeholder-slate-300 text-sm p-0"
+                            placeholder="Describe issue..."
+                            value={row.issue}
+                            onChange={(e) => {
+                              const newRows = [...maintenanceRows];
+                              newRows[index].issue = e.target.value;
+                              newRows[index].isSaved = false;
+                              setMaintenanceRows(newRows);
+                            }}
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <input 
+                             type="text"
+                             className="w-full bg-transparent border-none focus:ring-0 text-slate-600 dark:text-slate-400 placeholder-slate-300 text-sm p-0"
+                             placeholder="Priority..."
+                             value={row.priority}
+                             onChange={(e) => {
+                               const newRows = [...maintenanceRows];
+                               newRows[index].priority = e.target.value;
+                               newRows[index].isSaved = false;
+                               setMaintenanceRows(newRows);
+                             }}
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <input 
+                             type="text"
+                             className="w-full bg-transparent border-none focus:ring-0 text-slate-600 dark:text-slate-400 placeholder-slate-300 text-sm italic p-0"
+                             placeholder="Add notes..."
+                             value={row.notes}
+                             onChange={(e) => {
+                               const newRows = [...maintenanceRows];
+                               newRows[index].notes = e.target.value;
+                               newRows[index].isSaved = false;
+                               setMaintenanceRows(newRows);
+                             }}
+                          />
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            {row.isSaved ? (
+                              <button 
+                                onClick={() => {
+                                  const newRows = [...maintenanceRows];
+                                  newRows[index].isSaved = false;
+                                  setMaintenanceRows(newRows);
+                                }}
+                                className="p-1 rounded text-green-500 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
+                                title="Saved"
+                              >
+                                <span className="material-icons-round text-lg">check</span>
+                              </button>
+                            ) : (
+                              <button 
+                                onClick={async () => {
+                                  try {
+                                     const response = await fetch(`http://localhost:3000/api/maintenance/room/${row.roomId}`, {
+                                       method: 'POST',
+                                       headers: {
+                                         'Content-Type': 'application/json'
+                                       },
+                                       body: JSON.stringify({
+                                         issueType: row.issue,
+                                         priority: row.priority,
+                                         description: row.notes,
+                                         status: 'Open'
+                                       })
+                                     });
+
+                                     if (response.ok) {
+                                        const newRows = [...maintenanceRows];
+                                        newRows[index].isSaved = true;
+                                        setMaintenanceRows(newRows);
+                                     } else {
+                                       console.error('Failed to save maintenance ticket');
+                                     }
+                                  } catch (err) {
+                                    console.error('Error saving maintenance ticket:', err);
+                                  }
+                                }}
+                                className="p-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded text-slate-400 hover:text-blue-500 transition-colors"
+                                title="Save changes"
+                              >
+                                <span className="material-icons-round text-lg">save</span>
+                              </button>
+                            )}
+                            <button 
+                              onClick={() => {
+                                setMaintenanceRows(prev => prev.filter(r => r.roomId !== row.roomId));
+                              }}
+                              className="p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded text-slate-400 hover:text-red-500 transition-colors"
+                              title="Remove from list"
+                            >
+                              <span className="material-icons-round text-lg">delete</span>
+                            </button>
+                          </div>
+                        </td>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-slate-400 text-sm">
+                        No rooms currently in maintenance status.
                       </td>
-                      <td className="px-4 py-3 text-slate-500 dark:text-slate-500 text-xs italic">{ticket.description || 'No notes'}</td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
             </div>
@@ -393,6 +567,7 @@ export default function Ops() {
       <StaffRosterModal
         isOpen={isStaffRosterModalOpen}
         onClose={() => setIsStaffRosterModalOpen(false)}
+        onRosterUpdate={fetchData}
       />
     </div>
   );

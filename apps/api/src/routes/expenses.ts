@@ -34,7 +34,7 @@ router.get('/:id', async (req, res) => {
 // POST /api/expenses - Create a new expense
 router.post('/', async (req, res) => {
   try {
-    const { loggedByUserId, description, category, amount, dateIncurred, status, receiptUrl } = req.body;
+    const { loggedByUserId, description, category, amount, dateIncurred, notes, status, receiptUrl } = req.body;
 
     if (!description || !category || !amount || !dateIncurred) {
       return res.status(400).json({ message: 'description, category, amount, and dateIncurred are required' });
@@ -46,6 +46,7 @@ router.post('/', async (req, res) => {
       category,
       amount,
       dateIncurred,
+      notes,
       status: status || 'Pending',
       receiptUrl,
     }).returning();
@@ -53,7 +54,7 @@ router.post('/', async (req, res) => {
     res.status(201).json(newExpense[0]);
   } catch (error) {
     console.error('Error creating expense:', error);
-    res.status(500).json({ message: 'Failed to create expense' });
+    res.status(500).json({ message: `Failed to create expense: ${error instanceof Error ? error.message : 'Unknown error'}` });
   }
 });
 
@@ -61,10 +62,10 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { loggedByUserId, description, category, amount, dateIncurred, status, receiptUrl } = req.body;
+    const { loggedByUserId, description, category, amount, dateIncurred, notes, status, receiptUrl } = req.body;
 
     const updatedExpense = await db.update(expenses)
-      .set({ loggedByUserId, description, category, amount, dateIncurred, status, receiptUrl })
+      .set({ loggedByUserId, description, category, amount, dateIncurred, notes, status, receiptUrl })
       .where(eq(expenses.id, id))
       .returning();
 
