@@ -18,7 +18,7 @@ export default function AddMajorCleaningModal({ isOpen, onClose, onSuccess, edit
   const [description, setDescription] = useState('');
   const [roomArea, setRoomArea] = useState('');
   const [scheduledDate, setScheduledDate] = useState('');
-  const [priority, setPriority] = useState('Medium');
+  const [priority, setPriority] = useState<'Low' | 'Medium' | 'High' | 'Urgent'>('Medium');
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
 
@@ -222,7 +222,7 @@ export default function AddMajorCleaningModal({ isOpen, onClose, onSuccess, edit
                   <select 
                     className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all appearance-none cursor-pointer shadow-sm"
                     value={priority}
-                    onChange={(e) => setPriority(e.target.value)}
+                    onChange={(e) => setPriority(e.target.value as 'Low' | 'Medium' | 'High' | 'Urgent')}
                   >
                     <option>Low</option>
                     <option>Medium</option>
