@@ -3,13 +3,23 @@ import OpsChart from '../components/OpsChart';
 import InventorySetupModal from '../components/InventorySetupModal';
 import ReportIssueModal from '../components/ReportIssueModal';
 import StaffRosterModal from '../components/StaffRosterModal';
-import { expensesApi, inventoryApi, maintenanceApi, roomsApi, shiftsApi, usersApi } from '../services/api';
+import BudgetSetupModal from '../components/BudgetSetupModal';
+import { expensesApi, inventoryApi, maintenanceApi, roomsApi, shiftsApi, usersApi, budgetsApi } from '../services/api';
 import type { Expense, InventoryItem, MaintenanceTicket, Room, Shift, User } from '../types';
 
 export default function Ops() {
   const [isInventorySetupModalOpen, setIsInventorySetupModalOpen] = useState(false);
   const [isReportIssueModalOpen, setIsReportIssueModalOpen] = useState(false);
   const [isStaffRosterModalOpen, setIsStaffRosterModalOpen] = useState(false);
+  // State for toggling expense view
+  const [showAllExpenses, setShowAllExpenses] = useState(false);
+  // State for month/year filters
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1); // 1-12
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  // State for budget setup modal
+  const [isBudgetSetupModalOpen, setIsBudgetSetupModalOpen] = useState(false);
+  // State for selected month's budget
+  const [currentMonthBudget, setCurrentMonthBudget] = useState<number>(0);
 
   // API Data State
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -46,17 +56,29 @@ export default function Ops() {
       setRooms(roomsData);
       setShifts(shiftsData);
       setUsers(usersData);
-    } catch (error) {
-      console.error('Failed to fetch ops data:', error);
-    } finally {
+      setLoading(false); // Set loading to false after successful fetch
+    } catch (err) {
+      console.error('Error fetching data:', err);
       setLoading(false);
+    }
+  };
+
+  const fetchCurrentMonthBudget = async () => {
+    try {
+      const budgets = await budgetsApi.getByYear(selectedYear);
+      const budget = budgets.find(b => b.month === selectedMonth && b.year === selectedYear);
+      setCurrentMonthBudget(budget ? parseFloat(budget.projectedAmount) : 0);
+    } catch (error) {
+      console.error('Error fetching budget:', error);
+      setCurrentMonthBudget(0);
     }
   };
 
   // Fetch data on mount
   useEffect(() => {
     fetchData();
-  }, []);
+    fetchCurrentMonthBudget();
+  }, [selectedMonth, selectedYear]);
 
 
   // Initialize maintenance worksheet from rooms with 'Maintenance' status
@@ -86,16 +108,87 @@ export default function Ops() {
   }, [rooms, maintenance]);
 
   // Computed values
-  const totalMonthlyExpenses = expenses.reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
-  const lowStockItems = inventory.filter(item => item.currentStock < item.minThreshold);
+  // Filter expenses by selected month and year
+  const filteredExpenses = expenses.filter(exp => {
+    const expenseDate = new Date(exp.dateIncurred);
+    return expenseDate.getMonth() + 1 === selectedMonth && expenseDate.getFullYear() === selectedYear;
+  });
+  const totalMonthlyExpenses = filteredExpenses.reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
+
+  // Calculate previous month expenses for % change
+  const previousMonthDate = new Date(selectedYear, selectedMonth - 2, 1); // Month is 0-indexed in Date
+  const previousMonth = previousMonthDate.getMonth() + 1;
+  const previousMonthYear = previousMonthDate.getFullYear();
+
+  const prevMonthExpenses = expenses.filter(exp => {
+    const expenseDate = new Date(exp.dateIncurred);
+    return expenseDate.getMonth() + 1 === previousMonth && expenseDate.getFullYear() === previousMonthYear;
+  });
+  
+  const totalPrevMonthExpenses = prevMonthExpenses.reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
+  
+  const expenseChangePercent = totalPrevMonthExpenses === 0 
+    ? (totalMonthlyExpenses > 0 ? 100 : 0)
+    : ((totalMonthlyExpenses - totalPrevMonthExpenses) / totalPrevMonthExpenses) * 100;
+  // Match Inventory Alerts logic: Stock <= Threshold + 10
+  const lowStockItems = inventory.filter(item => item.currentStock <= item.minThreshold + 10);
   const openMaintenanceTickets = maintenance.filter(m => m.status !== 'Resolved');
+  // Count rooms with Maintenance status
+  const maintenanceRoomsCount = rooms.filter(room => room.status === 'Maintenance').length;
+  
+  // Calculate budget usage percentage
+  const budgetUsagePercent = currentMonthBudget > 0 
+    ? Math.min(Math.round((totalMonthlyExpenses / currentMonthBudget) * 100), 100)
+    : 0;
 
   // Filter shifts for today
   const todaysDateStr = new Date().toISOString().split('T')[0];
   const todaysShifts = shifts.filter(s => s.shiftDate.startsWith(todaysDateStr));
 
+  // Month names for dropdown
+  const months = [
+    { value: 1, label: 'January' },
+    { value: 2, label: 'February' },
+    { value: 3, label: 'March' },
+    { value: 4, label: 'April' },
+    { value: 5, label: 'May' },
+    { value: 6, label: 'June' },
+    { value: 7, label: 'July' },
+    { value: 8, label: 'August' },
+    { value: 9, label: 'September' },
+    { value: 10, label: 'October' },
+    { value: 11, label: 'November' },
+    { value: 12, label: 'December' }
+  ];
+  const years = Array.from({ length: 8 }, (_, i) => 2025 + i); // 2025-2032
+
   return (
     <div className="max-w-7xl mx-auto space-y-8">
+      {/* Operations Overview Header with Month/Year Filters */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Operations Overview</h2>
+        <div className="flex items-center gap-3">
+          <select
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(Number(e.target.value))}
+            className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-primary transition-all"
+          >
+            {months.map(month => (
+              <option key={month.value} value={month.value}>{month.label}</option>
+            ))}
+          </select>
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(Number(e.target.value))}
+            className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-primary transition-all"
+          >
+            {years.map(year => (
+              <option key={year} value={year}>{year}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Monthly OpEx Card */}
@@ -107,8 +200,12 @@ export default function Ops() {
               <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
                 <span className="material-icons-round text-xl">account_balance_wallet</span>
               </div>
-              <span className="text-xs font-medium bg-red-400/20 text-red-50 px-2 py-1 rounded-full border border-red-400/30 flex items-center gap-1">
-                <span className="material-icons-round text-sm">arrow_upward</span> 5%
+              <span className={`text-xs font-medium px-2 py-1 rounded-full border flex items-center gap-1 ${
+                expenseChangePercent > 0 
+                  ? 'bg-red-400/20 text-red-50 border-red-400/30' 
+                  : 'bg-green-400/20 text-green-50 border-green-400/30'
+              }`}>
+                <span className="material-icons-round text-sm">{expenseChangePercent > 0 ? 'arrow_upward' : 'arrow_downward'}</span> {Math.abs(expenseChangePercent).toFixed(1)}%
               </span>
             </div>
             <h3 className="text-rose-100 text-sm font-medium uppercase tracking-wide">Monthly OpEx</h3>
@@ -116,11 +213,11 @@ export default function Ops() {
               <h2 className="text-4xl font-bold">Rp {loading ? '...' : totalMonthlyExpenses.toLocaleString('id-ID')}</h2>
             </div>
             <div className="mt-4 flex items-center justify-between text-xs text-rose-100 opacity-90">
-              <span>Budget: Rp 150.000.000</span>
-              <span>82% Used</span>
+              <span>Budget: Rp {currentMonthBudget.toLocaleString('id-ID')}</span>
+              <span>{budgetUsagePercent}% Used</span>
             </div>
             <div className="mt-1 h-1.5 w-full bg-red-900/30 rounded-full overflow-hidden">
-              <div className="h-full bg-white/90 w-[82%] rounded-full shadow-[0_0_10px_rgba(255,255,255,0.5)]"></div>
+              <div className={`h-full bg-white/90 rounded-full shadow-[0_0_10px_rgba(255,255,255,0.5)]`} style={{ width: `${budgetUsagePercent}%` }}></div>
             </div>
           </div>
         </div>
@@ -141,12 +238,19 @@ export default function Ops() {
             <h3 className="text-amber-50 text-sm font-medium uppercase tracking-wide">Low Stock Items</h3>
             <div className="flex items-baseline gap-2 mt-1">
               <h2 className="text-4xl font-bold">{lowStockItems.length}</h2>
-              <span className="text-amber-100 text-sm">Items Critical</span>
+              <span className="text-amber-100 text-sm">Items Low or Critical</span>
             </div>
             <div className="flex -space-x-2 mt-4">
-              <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-white/20 ring-2 ring-orange-500 text-xs font-bold">TP</span>
-              <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-white/20 ring-2 ring-orange-500 text-xs font-bold">S.</span>
-              <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-white/20 ring-2 ring-orange-500 text-xs font-bold">Tow</span>
+              {lowStockItems.slice(0, 3).map((item) => (
+                <span key={item.id} className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-white/20 ring-2 ring-orange-500 text-xs font-bold uppercase" title={item.name}>
+                  {item.name.substring(0, 2)}
+                </span>
+              ))}
+              {lowStockItems.length > 3 && (
+                <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-white/20 ring-2 ring-orange-500 text-xs font-bold">
+                  +{lowStockItems.length - 3}
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -166,10 +270,10 @@ export default function Ops() {
             </div>
             <h3 className="text-blue-100 text-sm font-medium uppercase tracking-wide">Maintenance</h3>
             <div className="flex items-baseline gap-2 mt-1">
-              <h2 className="text-4xl font-bold">{openMaintenanceTickets.length}</h2>
-              <span className="text-blue-200 text-sm">Open Tickets</span>
+              <h2 className="text-4xl font-bold">{maintenanceRoomsCount}</h2>
+              <span className="text-blue-200 text-sm">Rooms in Maintenance</span>
             </div>
-            <p className="text-blue-100 text-sm mt-4 opacity-90">{openMaintenanceTickets.filter(m => m.priority === 'High' || m.priority === 'Critical').length} Urgent</p>
+            <p className="text-blue-100 text-sm mt-4 opacity-90">{openMaintenanceTickets.filter(m => m.priority === 'High' || m.priority === 'Critical').length} Urgent Tickets</p>
           </div>
         </div>
       </div>
@@ -183,16 +287,21 @@ export default function Ops() {
               <p className="text-sm text-slate-500 dark:text-slate-400">Projected vs Actual Operational Costs (6 Months)</p>
             </div>
             <div className="flex gap-2">
-              <button className="p-1.5 text-slate-400 hover:text-primary transition-colors bg-slate-100 dark:bg-slate-700/50 rounded-lg">
-                <span className="material-icons-round text-lg">filter_list</span>
+              <button 
+                onClick={() => setIsBudgetSetupModalOpen(true)}
+                className="px-3 py-1.5 text-sm font-medium text-primary bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-lg border border-blue-100 dark:border-blue-800 transition-colors flex items-center gap-1.5"
+              >
+                <span className="material-icons-round text-base">settings</span>
+                Setup Budget
               </button>
+
               <button className="p-1.5 text-slate-400 hover:text-primary transition-colors bg-slate-100 dark:bg-slate-700/50 rounded-lg">
                 <span className="material-icons-round text-lg">download</span>
               </button>
             </div>
           </div>
           <div className="relative h-72 w-full">
-            <OpsChart />
+            <OpsChart expenses={expenses} />
           </div>
         </div>
 
@@ -209,61 +318,99 @@ export default function Ops() {
             </button>
           </div>
           <div className="space-y-4 flex-1 overflow-y-auto pr-2 custom-scrollbar">
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 group">
-              <div className="w-10 h-10 rounded-full bg-white dark:bg-red-900/40 text-red-500 dark:text-red-400 flex items-center justify-center flex-shrink-0 shadow-sm">
-                <span className="material-icons-round text-lg">soap</span>
+            {/* Items approaching threshold (within 10 units) */}
+            {inventory
+              .filter(item => item.currentStock <= item.minThreshold + 10)
+              .sort((a, b) => (a.currentStock - a.minThreshold) - (b.currentStock - b.minThreshold))
+              .map(item => {
+                const isCritical = item.currentStock <= item.minThreshold;
+                const isWarning = !isCritical && item.currentStock <= item.minThreshold + 10;
+                
+                // Generate WhatsApp link with vendor contact
+                const whatsappLink = item.contactVendor 
+                  ? `https://wa.me/${item.contactVendor.replace(/\D/g, '')}?text=Hi, I would like to order more ${item.name}. Current stock: ${item.currentStock} ${item.unit}`
+                  : '#';
+                
+                return (
+                  <div 
+                    key={item.id}
+                    className={`flex items-center gap-3 p-3 rounded-xl ${
+                      isCritical 
+                        ? 'bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30'
+                        : isWarning
+                          ? 'bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30'
+                          : 'hover:bg-slate-50 dark:hover:bg-slate-700/30 border border-transparent'
+                    } group`}
+                  >
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm ${
+                      isCritical 
+                        ? 'bg-white dark:bg-red-900/40 text-red-500 dark:text-red-400'
+                        : isWarning
+                          ? 'bg-white dark:bg-amber-900/40 text-amber-500 dark:text-amber-400'
+                          : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                    }`}>
+                      <span className="material-icons-round text-lg">inventory_2</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">{item.name}</p>
+                      <p className={`text-xs ${
+                        isCritical 
+                          ? 'text-red-500 dark:text-red-400'
+                          : isWarning
+                            ? 'text-amber-600 dark:text-amber-400'
+                            : 'text-slate-500 dark:text-slate-400'
+                      }`}>
+                        {item.currentStock} {item.unit} remaining
+                      </p>
+                    </div>
+                    {item.contactVendor ? (
+                      <a 
+                        href={whatsappLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`text-xs font-medium px-2.5 py-1.5 rounded-lg shadow-sm border transition-colors ${
+                          isCritical
+                            ? 'text-red-600 bg-white dark:bg-red-900/50 border-red-100 dark:border-red-800 hover:bg-red-50'
+                            : 'text-amber-700 bg-white dark:bg-amber-900/50 border-amber-100 dark:border-amber-800 hover:bg-amber-50'
+                        }`}
+                      >
+                        Order
+                      </a>
+                    ) : (
+                      <span className="text-xs text-slate-400">{item.currentStock} {item.unit}</span>
+                    )}
+                  </div>
+                );
+              })}
+            {inventory.filter(item => item.currentStock <= item.minThreshold + 10).length === 0 && (
+              <div className="text-center py-8 text-slate-500">
+                <span className="material-icons-round text-4xl mb-2 opacity-50">check_circle</span>
+                <p>All inventory items are well stocked!</p>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">Premium Shampoo (50ml)</p>
-                <p className="text-xs text-red-500 dark:text-red-400">12 units remaining</p>
-              </div>
-              <button className="text-xs font-medium text-red-600 bg-white dark:bg-red-900/50 px-2.5 py-1.5 rounded-lg shadow-sm border border-red-100 dark:border-red-800 hover:bg-red-50 transition-colors">
-                Order
-              </button>
-            </div>
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 group">
-              <div className="w-10 h-10 rounded-full bg-white dark:bg-amber-900/40 text-amber-500 dark:text-amber-400 flex items-center justify-center flex-shrink-0 shadow-sm">
-                <span className="material-icons-round text-lg">coffee</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">Espresso Pods</p>
-                <p className="text-xs text-amber-600 dark:text-amber-400">45 units remaining</p>
-              </div>
-              <button className="text-xs font-medium text-amber-700 bg-white dark:bg-amber-900/50 px-2.5 py-1.5 rounded-lg shadow-sm border border-amber-100 dark:border-amber-800 hover:bg-amber-50 transition-colors">
-                Check
-              </button>
-            </div>
-            <div className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors border border-transparent hover:border-slate-100 dark:hover:border-slate-700 group">
-              <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center flex-shrink-0">
-                <span className="material-icons-round text-lg">bed</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">King Size Sheets</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Stock Healthy</p>
-              </div>
-              <span className="text-xs font-medium text-slate-400">140 units</span>
-            </div>
-            <div className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors border border-transparent hover:border-slate-100 dark:hover:border-slate-700 group">
-              <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center flex-shrink-0">
-                <span className="material-icons-round text-lg">cleaning_services</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">Sanitizing Spray</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Stock Healthy</p>
-              </div>
-              <span className="text-xs font-medium text-slate-400">25 bottles</span>
-            </div>
+            )}
           </div>
         </div>
       </div>
 
+
+
       {/* Recent Operational Expenses */}
       <div className="glass-card rounded-2xl overflow-hidden">
         <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-700/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <h3 className="text-lg font-bold text-slate-800 dark:text-white">Recent Operational Expenses</h3>
+          <h3 className="text-lg font-bold text-slate-800 dark:text-white">
+            {showAllExpenses ? 'All Operational Expenses' : 'Recent Operational Expenses'}
+          </h3>
           <div className="flex gap-2">
-            <button className="px-3 py-1.5 text-sm font-medium text-primary bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-100 dark:border-blue-800">All Expenses</button>
-            <button className="px-3 py-1.5 text-sm font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors">Pending Approval</button>
+            <button 
+              onClick={() => setShowAllExpenses(!showAllExpenses)}
+              className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                showAllExpenses 
+                  ? 'text-primary bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800'
+                  : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+              }`}
+            >
+              {showAllExpenses ? 'Show Recent Only' : 'All Expenses'}
+            </button>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -282,7 +429,7 @@ export default function Ops() {
               {expenses.length > 0 ? (
                 expenses
                   .sort((a, b) => new Date(b.dateIncurred).getTime() - new Date(a.dateIncurred).getTime())
-                  .slice(0, 10)
+                  .slice(0, showAllExpenses ? undefined : 5)
                   .map((expense) => {
                     const loggedByUser = users.find(u => u.id === expense.loggedByUserId);
                     const formattedDate = new Date(expense.dateIncurred).toLocaleDateString('en-US', { 
@@ -413,23 +560,18 @@ export default function Ops() {
           <div className="glass-card rounded-2xl p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-slate-800 dark:text-white">Room Maintenance Status</h3>
-               <button 
-                onClick={() => setIsReportIssueModalOpen(true)}
-                className="text-primary hover:text-blue-700 text-sm font-medium"
-               >
-                 Report Issue
-               </button>
+
             </div>
             
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="text-xs text-slate-400 uppercase tracking-wider border-b border-gray-100 dark:border-gray-700/50">
-                    <th className="px-4 py-3 font-medium">Room</th>
-                    <th className="px-4 py-3 font-medium">Issue</th>
-                    <th className="px-4 py-3 font-medium">Priority</th>
-                    <th className="px-4 py-3 font-medium">Notes</th>
-                    <th className="px-4 py-3 font-medium text-right">Action</th>
+                    <th className="px-4 py-3 font-medium w-16">Room</th>
+                    <th className="px-4 py-3 font-medium min-w-[200px]">Issue</th>
+                    <th className="px-4 py-3 font-medium w-24">Priority</th>
+                    <th className="px-4 py-3 font-medium min-w-[200px]">Notes</th>
+                    <th className="px-4 py-3 font-medium text-right w-20">Action</th>
                   </tr>
                 </thead>
                 <tbody className="text-sm divide-y divide-gray-100 dark:divide-gray-700/50">
@@ -558,7 +700,10 @@ export default function Ops() {
 
       <InventorySetupModal 
         isOpen={isInventorySetupModalOpen}
-        onClose={() => setIsInventorySetupModalOpen(false)}
+        onClose={() => {
+          setIsInventorySetupModalOpen(false);
+          fetchData(); // Refresh inventory data
+        }}
       />
       <ReportIssueModal
         isOpen={isReportIssueModalOpen}
@@ -568,6 +713,14 @@ export default function Ops() {
         isOpen={isStaffRosterModalOpen}
         onClose={() => setIsStaffRosterModalOpen(false)}
         onRosterUpdate={fetchData}
+      />
+      <BudgetSetupModal
+        isOpen={isBudgetSetupModalOpen}
+        onClose={() => {
+          setIsBudgetSetupModalOpen(false);
+          fetchData(); // Refresh chart data after budget update
+        }}
+        year={selectedYear}
       />
     </div>
   );

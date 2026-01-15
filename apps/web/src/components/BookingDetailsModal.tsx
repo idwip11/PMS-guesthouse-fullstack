@@ -151,10 +151,12 @@ export default function BookingDetailsModal({ isOpen, onClose, bookingId }: Book
 
   const handleAddPayment = async () => {
     if (!bookingId || !reservation) return;
+    // For OTA bookings, payment date is uncertain - leave empty
+    const isDirectBooking = reservation.source === 'Direct / Walk-in';
     try {
         const newPayment = await reservationsApi.addPayment(bookingId, {
             amount: '0',
-            paymentDate: new Date().toISOString().split('T')[0],
+            paymentDate: isDirectBooking ? new Date().toISOString().split('T')[0] : '',
             paymentMethod: 'Cash',
             type: 'Additional Charges',
             status: 'Paid',
@@ -465,6 +467,7 @@ export default function BookingDetailsModal({ isOpen, onClose, bookingId }: Book
                   <select 
                     className={`w-full font-semibold rounded-lg text-sm mb-4 border px-3 py-2 outline-none ${
                         formData.status === 'Confirmed' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 
+                        formData.status === 'Checked In' ? 'bg-blue-50 border-blue-200 text-blue-700' :
                         formData.status === 'Cancelled' ? 'bg-red-50 border-red-200 text-red-700' :
                         'bg-slate-50 border-slate-200 text-slate-700'
                     }`}
@@ -472,6 +475,7 @@ export default function BookingDetailsModal({ isOpen, onClose, bookingId }: Book
                     onChange={(e) => setFormData({...formData, status: e.target.value})}
                   >
                     <option value="Confirmed">Confirmed</option>
+                    <option value="Checked In">Checked In</option>
                     <option value="Cancelled">Cancelled</option>
                   </select>
                   <div className="space-y-3 pt-3 border-t border-slate-100">

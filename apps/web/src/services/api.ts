@@ -3,7 +3,7 @@
 const API_BASE_URL = 'http://localhost:3000/api';
 
 // Generic fetch wrapper with error handling
-async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
+export async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     headers: {
       'Content-Type': 'application/json',
@@ -90,7 +90,26 @@ export const reservationsApi = {
   delete: (id: string) => fetchApi<{ message: string }>(`/reservations/${id}`, { method: 'DELETE' }),
   createWithDetails: (data: any) =>
     fetchApi<any>('/reservations/with-details', { method: 'POST', body: JSON.stringify(data) }),
+  getTodayActivity: () => fetchApi<{
+    checkIns: TodayActivityItem[];
+    checkOuts: TodayActivityItem[];
+    counts: { checkInCount: number; checkOutCount: number };
+  }>('/reservations/today/activity'),
 };
+
+// Type for today's activity items
+export interface TodayActivityItem {
+  id: string;
+  orderId: string;
+  guestName: string;
+  roomNumber: string;
+  source: string;
+  totalAmount: string;
+  paidAmount: number;
+  outstanding: number;
+  initials: string;
+  status: string;
+}
 
 // --- EXPENSES API ---
 export const expensesApi = {
@@ -180,4 +199,64 @@ export const financeApi = {
   },
   saveTarget: (data: { month: number; year: number; targetAmount: number }) => 
     fetchApi<{ success: boolean }>('/finance/target', { method: 'POST', body: JSON.stringify(data) }),
+  getReport: (startDate: string, endDate: string, guesthouse?: number) => {
+    const params = new URLSearchParams();
+    params.append('startDate', startDate);
+    params.append('endDate', endDate);
+    if (guesthouse !== undefined) params.append('guesthouse', guesthouse.toString());
+    return fetchApi<{
+      totalIncome: number;
+      totalExpense: number;
+      netProfit: number;
+      incomeDetails: Array<{
+        room_id: number;
+        order_id: string;
+        source: string;
+        check_in_date: string;
+        check_out_date: string;
+        total_amount: number;
+      }>;
+      expenseDetails: Array<{
+        description: string;
+        category: string;
+        amount: number;
+        date_incurred: string;
+        notes: string | null;
+        guesthouse: number;
+      }>;
+      filter: {
+        startDate: string;
+        endDate: string;
+        guesthouse: number;
+      };
+    }>(`/finance/report?${params.toString()}`);
+  },
+};
+
+// --- BUDGETS API (Operational) ---
+export const budgetsApi = {
+  getByYear: (year: number) => fetchApi<import('../types').OperationalBudget[]>(`/budgets?year=${year}`),
+  bulkUpsert: (budgets: Array<{ year: number; month: number; projectedAmount: number }>) =>
+    fetchApi<{ message: string; budgets: import('../types').OperationalBudget[] }>('/budgets', {
+      method: 'POST',
+      body: JSON.stringify({ budgets }),
+    }),
+};
+
+// --- MARKETING BUDGETS API ---
+export const marketingBudgetsApi = {
+  getByYear: (year: number) => fetchApi<Array<{ id: string, year: number, month: number, budgetAmount: string }>>(`/marketing/budgets/${year}`),
+  bulkUpsert: (budgets: Array<{ year: number; month: number; amount: number }>) =>
+    Promise.all(budgets.map(b => fetchApi('/marketing/budgets', { method: 'POST', body: JSON.stringify(b) })))
+};
+
+// --- MARKETING API ---
+export const marketingApi = {
+    lookupMember: (memberId: string) => fetchApi<{
+        fullName: string;
+        email: string;
+        phone: string;
+        origin: string;
+        notes?: string;
+    }>(`/marketing/lookup-member/${memberId}`),
 };

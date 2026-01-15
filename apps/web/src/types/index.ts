@@ -5,6 +5,7 @@ export interface User {
   username: string;
   fullName: string;
   role: string;
+  avatarUrl?: string;
   createdAt: string;
 }
 
@@ -80,6 +81,7 @@ export interface Expense {
   notes?: string | null;
   status: 'Pending' | 'Approved' | 'Rejected';
   receiptUrl: string | null;
+  guesthouse: number; // 0 = All, 1-5 = Guesthouse 1-5
   createdAt: string;
 }
 
@@ -90,6 +92,7 @@ export interface InventoryItem {
   currentStock: number;
   minThreshold: number;
   unit: string;
+  contactVendor?: string;
   updatedAt: string;
 }
 
@@ -126,3 +129,12 @@ export interface CleaningTask {
   createdAt: string;
 }
 
+
+export interface OperationalBudget {
+  id: string;
+  year: number;
+  month: number;
+  projectedAmount: string;
+  createdAt: string;
+  updatedAt: string;
+}

@@ -17,6 +17,7 @@ export default function LogExpenseModal({ isOpen, onClose }: LogExpenseModalProp
   const [notes, setNotes] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [adminUser, setAdminUser] = useState<User | null>(null);
+  const [guesthouse, setGuesthouse] = useState<number>(0);
 
   useEffect(() => {
     // Fetch a default admin/staff user to link the expense to
@@ -72,6 +73,7 @@ export default function LogExpenseModal({ isOpen, onClose }: LogExpenseModalProp
             dateIncurred,
             notes,
             receiptUrl,
+            guesthouse,
             status: 'Pending'
         });
 
@@ -83,6 +85,7 @@ export default function LogExpenseModal({ isOpen, onClose }: LogExpenseModalProp
         setAmount('');
         setNotes('');
         setFile(null);
+        setGuesthouse(0);
         onClose();
         
     } catch (err) {
@@ -197,6 +200,28 @@ export default function LogExpenseModal({ isOpen, onClose }: LogExpenseModalProp
                                type="date"
                                required
                             />
+                         </div>
+                      </div>
+                      <div>
+                         <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                            Guesthouse <span className="text-red-500">*</span>
+                         </label>
+                         <div className="relative">
+                            <select 
+                               value={guesthouse}
+                               onChange={(e) => setGuesthouse(Number(e.target.value))}
+                               className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 pl-11 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all appearance-none cursor-pointer"
+                               required
+                            >
+                               <option value={0}>All Guesthouses</option>
+                               <option value={1}>Guesthouse 1</option>
+                               <option value={2}>Guesthouse 2</option>
+                               <option value={3}>Guesthouse 3</option>
+                               <option value={4}>Guesthouse 4</option>
+                               <option value={5}>Guesthouse 5</option>
+                            </select>
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 material-icons-round text-xl">apartment</span>
+                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 material-icons-round pointer-events-none">expand_more</span>
                          </div>
                       </div>
                    </div>

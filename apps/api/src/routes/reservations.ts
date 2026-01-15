@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db';
-import { reservations, guests, rooms, payments, invoiceItems, loyaltyMembers } from '../db/schema';
+import { reservations, guests, rooms, payments, invoiceItems, loyaltyMembers, inventoryItems } from '../db/schema';
 import { eq, and, ne, or, lt, gt, sql, sum } from 'drizzle-orm';
 
 const router = Router();
@@ -89,6 +89,96 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/reservations/today/activity - Get today's check-ins and check-outs
+router.get('/today/activity', async (req, res) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Fetch check-ins for today (checkInDate = today, status = Confirmed)
+    const checkIns = await db.select({
+      id: reservations.id,
+      orderId: reservations.orderId,
+      guestName: guests.fullName,
+      roomNumber: rooms.roomNumber,
+      source: reservations.source,
+      totalAmount: reservations.totalAmount,
+      checkInDate: reservations.checkInDate,
+      status: reservations.status,
+    })
+    .from(reservations)
+    .leftJoin(guests, eq(reservations.guestId, guests.id))
+    .leftJoin(rooms, eq(reservations.roomId, rooms.id))
+    .where(and(
+      eq(reservations.checkInDate, today),
+      or(eq(reservations.status, 'Confirmed'), eq(reservations.status, 'Checked_In'))
+    ));
+
+    // Fetch check-outs for today (checkOutDate = today, not cancelled)
+    const checkOuts = await db.select({
+      id: reservations.id,
+      orderId: reservations.orderId,
+      guestName: guests.fullName,
+      roomNumber: rooms.roomNumber,
+      source: reservations.source,
+      totalAmount: reservations.totalAmount,
+      checkOutDate: reservations.checkOutDate,
+      status: reservations.status,
+    })
+    .from(reservations)
+    .leftJoin(guests, eq(reservations.guestId, guests.id))
+    .leftJoin(rooms, eq(reservations.roomId, rooms.id))
+    .where(and(
+      eq(reservations.checkOutDate, today),
+      ne(reservations.status, 'Cancelled')
+    ));
+
+    // Fetch all payments to calculate outstanding balance
+    const allPayments = await db.select().from(payments);
+
+    // Calculate outstanding for check-ins
+    const checkInsWithBalance = checkIns.map(res => {
+      const resPayments = allPayments.filter(p => p.reservationId === res.id && p.status === 'Paid');
+      const totalPaid = resPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+      const totalAmount = parseFloat(res.totalAmount);
+      const outstanding = Math.max(0, totalAmount - totalPaid);
+      
+      return {
+        ...res,
+        paidAmount: totalPaid,
+        outstanding,
+        initials: res.guestName ? res.guestName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() : 'XX'
+      };
+    });
+
+    // Calculate outstanding for check-outs
+    const checkOutsWithBalance = checkOuts.map(res => {
+      const resPayments = allPayments.filter(p => p.reservationId === res.id && p.status === 'Paid');
+      const totalPaid = resPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+      const totalAmount = parseFloat(res.totalAmount);
+      const outstanding = Math.max(0, totalAmount - totalPaid);
+      
+      return {
+        ...res,
+        paidAmount: totalPaid,
+        outstanding,
+        initials: res.guestName ? res.guestName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() : 'XX'
+      };
+    });
+
+    res.json({
+      checkIns: checkInsWithBalance,
+      checkOuts: checkOutsWithBalance,
+      counts: {
+        checkInCount: checkInsWithBalance.length,
+        checkOutCount: checkOutsWithBalance.length
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching today activity:', error);
+    res.status(500).json({ message: 'Failed to fetch today activity' });
+  }
+});
+
 // GET /api/reservations/:id/payments - Get payments for a reservation
 router.get('/:id/payments', async (req, res) => {
   try {
@@ -111,7 +201,7 @@ router.post('/:id/payments', async (req, res) => {
       reservationId: id,
       orderId: orderId || null, // Denormalized for easier querying
       amount: amount.toString(),
-      paymentDate: paymentDate ? paymentDate : new Date().toISOString().split('T')[0],
+      paymentDate: paymentDate || null, // Null for OTA bookings with uncertain dates
       paymentMethod,
       notes: req.body.notes,
       type: type || 'Payment',
@@ -134,7 +224,7 @@ router.put('/payments/:paymentId', async (req, res) => {
     const updatedPayment = await db.update(payments)
       .set({
         amount: amount ? amount.toString() : undefined,
-        paymentDate: paymentDate,
+        paymentDate: paymentDate || null, // Convert empty string to null
         paymentMethod,
         notes: req.body.notes,
         type,
@@ -256,6 +346,14 @@ router.post('/', async (req, res) => {
       totalAmount,
     }).returning();
 
+    // Auto-deduct toiletries if reservation is created with 'Checked In' status
+    if (status === 'Checked In') {
+      await db.update(inventoryItems)
+        .set({ currentStock: sql`current_stock - 1` })
+        .where(eq(inventoryItems.category, 'Toiletries'));
+      console.log(`Toiletries stock reduced by 1 for new reservation ${newReservation[0].id} (status Checked In)`);
+    }
+
     res.status(201).json(newReservation[0]);
   } catch (error: any) {
     console.error('Error creating reservation:', error);
@@ -288,6 +386,10 @@ router.put('/:id', async (req, res) => {
       hasLaundry,
       totalAmount,
     } = req.body;
+
+    // Fetch old reservation to check previous status
+    const oldReservation = await db.select().from(reservations).where(eq(reservations.id, id));
+    const oldStatus = oldReservation[0]?.status;
 
     // Check for room overlap when updating dates or room (exclude current reservation)
     if (roomId && checkInDate && checkOutDate) {
@@ -324,6 +426,34 @@ router.put('/:id', async (req, res) => {
 
     if (updatedReservation.length === 0) {
       return res.status(404).json({ message: 'Reservation not found' });
+    }
+
+    // Auto-deduct toiletries if status changed to 'Checked In'
+    if (status === 'Checked In' && oldStatus !== 'Checked In') {
+      await db.update(inventoryItems)
+        .set({ currentStock: sql`current_stock - 1` })
+        .where(eq(inventoryItems.category, 'Toiletries'));
+      console.log(`Toiletries stock reduced by 1 for reservation ${id} (status changed to Checked In)`);
+    }
+
+    // Add/Update Loyalty Member if memberId is provided
+    if (memberId) {
+       const finalOrderId = orderId || oldReservation[0]?.orderId;
+       if (finalOrderId) {
+           const existingMember = await db.select().from(loyaltyMembers).where(eq(loyaltyMembers.memberId, memberId));
+           if (existingMember.length === 0) {
+               await db.insert(loyaltyMembers).values({
+                   memberId,
+                   orderId: finalOrderId,
+                   joinedAt: new Date(),
+                   lastActivity: new Date()
+               });
+           } else {
+               await db.update(loyaltyMembers)
+                 .set({ orderId: finalOrderId, lastActivity: new Date() })
+                 .where(eq(loyaltyMembers.memberId, memberId));
+           }
+       }
     }
 
     res.json(updatedReservation[0]);

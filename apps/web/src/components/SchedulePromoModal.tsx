@@ -185,14 +185,7 @@ export default function SchedulePromoModal({ isOpen, onClose, onSubmit, initialD
             {/* Hidden Status Field (default Active) */}
             <input type="hidden" name="status" value={formData.status} />
 
-            <div className="space-y-2">
-              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 ml-1">Promo Image/Icon</label>
-              <div className="glass-input border-dashed border-2 rounded-xl p-6 flex flex-col items-center justify-center hover:bg-primary/5 cursor-pointer transition-all group">
-                <span className="material-icons-round text-4xl text-slate-400 group-hover:text-primary mb-2 transition-colors">add_photo_alternate</span>
-                <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Click to upload or drag & drop</span>
-                <span className="text-xs text-slate-400 mt-1">Recommended: 1200x630px (Max 2MB)</span>
-              </div>
-            </div>
+
             
             <div className="px-8 py-6 bg-white/40 dark:bg-slate-900/40 border-t border-white/20 dark:border-slate-700/30 flex items-center justify-end gap-4 -mx-8 -mb-8">
               <button 

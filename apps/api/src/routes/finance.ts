@@ -38,12 +38,15 @@ router.get('/dashboard', async (req, res) => {
         lt(expenses.dateIncurred, endDate.toISOString())
     );
 
-    // 1. Total Revenue (Filtered)
+    // 1. Total Revenue (Filtered) - Only count payments WITH actual payment dates
     const revenueResult = await db.select({ 
       total: sql<string>`sum(${payments.amount})` 
     })
     .from(payments)
-    .where(timeFilter);
+    .where(and(
+      timeFilter,
+      sql`${payments.paymentDate} IS NOT NULL` // Exclude unpaid OTA payments
+    ));
     const totalRevenue = Number(revenueResult[0]?.total || 0);
 
     // 2. Total Expenses (Filtered)
@@ -54,23 +57,64 @@ router.get('/dashboard', async (req, res) => {
     .where(expenseTimeFilter);
     const totalExpenses = Number(expensesResult[0]?.total || 0);
 
-    // 3. Outstanding (All time or filtered?) -> Logic for "Outstanding" is usually "Currently Unpaid", regardless of date.
-    // But if we filter by month, maybe we show "Outstanding reservations created in this month"?
-    // Let's keep Outstanding as "All Active Unpaid" for now as it's a liability metric.
+    // --- NEW: Calculate Previous Month Data for Percentage Change ---
+    const prevMonthDate = new Date(startDate);
+    prevMonthDate.setMonth(prevMonthDate.getMonth() - 1);
+    const prevMonthStart = new Date(prevMonthDate.getFullYear(), prevMonthDate.getMonth(), 1);
+    const prevMonthEnd = new Date(prevMonthDate.getFullYear(), prevMonthDate.getMonth() + 1, 1);
+
+    const prevMonthRevenueResult = await db.select({ 
+      total: sql<string>`sum(${payments.amount})` 
+    })
+    .from(payments)
+    .where(and(
+        gte(payments.paymentDate, prevMonthStart.toISOString()),
+        lt(payments.paymentDate, prevMonthEnd.toISOString()),
+        sql`${payments.paymentDate} IS NOT NULL` // Exclude unpaid OTA payments
+    ));
+    const prevRevenue = Number(prevMonthRevenueResult[0]?.total || 0);
+
+    const prevMonthExpensesResult = await db.select({ 
+      total: sql<string>`sum(${expenses.amount})` 
+    })
+    .from(expenses)
+    .where(and(
+        gte(expenses.dateIncurred, prevMonthStart.toISOString()),
+        lt(expenses.dateIncurred, prevMonthEnd.toISOString())
+    ));
+    const prevExpenses = Number(prevMonthExpensesResult[0]?.total || 0);
+
+    // Calculate % Change
+    const calculateChange = (current: number, previous: number) => {
+        if (previous === 0) return current > 0 ? 100 : 0;
+        return ((current - previous) / previous) * 100;
+    };
+
+    const revenueChange = calculateChange(totalRevenue, prevRevenue);
+    const expensesChange = calculateChange(totalExpenses, prevExpenses);
+    // ----------------------------------------------------------------
+
+    // 3. Outstanding = Total Reservation Value - Payments ACTUALLY RECEIVED (with dates)
+    // Logic: 
+    //   - Original unpaid reservations still count as outstanding
+    //   - Payments with NULL dates (pending OTA) don't reduce outstanding
+    //   - Only payments WITH dates count as received revenue
     const reservationsResult = await db.select({ 
       totalVal: sql<string>`sum(${reservations.totalAmount})` 
     })
     .from(reservations)
     .where(not(eq(reservations.status, 'Cancelled')));
-    // NOTE: Outstanding calculation in previous code was simplified (Total Res Vals - Total Revenue). 
-    // This is rough. Ideally should sum (Reservation Total - Paid Amount) for each info.
-    // Keeping existing logic for consistency but it might be weird if we filter revenue.
-    // Let's keep Outstanding untouched/global for now.
-    
-    const allTimeRevenueResult = await db.select({ total: sql<string>`sum(${payments.amount})` }).from(payments);
-    const allTimeRevenue = Number(allTimeRevenueResult[0]?.total || 0);
     const totalReservationValue = Number(reservationsResult[0]?.totalVal || 0);
-    const outstanding = Math.max(0, totalReservationValue - allTimeRevenue);
+    
+    // Sum only payments that have been ACTUALLY RECEIVED (has payment date)
+    const allTimeReceivedResult = await db.select({ 
+      total: sql<string>`sum(${payments.amount})` 
+    })
+    .from(payments)
+    .where(sql`${payments.paymentDate} IS NOT NULL`);
+    const allTimeReceived = Number(allTimeReceivedResult[0]?.total || 0);
+    
+    const outstanding = Math.max(0, totalReservationValue - allTimeReceived);
 
     // 4. Net Profit (Filtered)
     const netProfit = totalRevenue - totalExpenses;
@@ -109,7 +153,7 @@ router.get('/dashboard', async (req, res) => {
       .limit(50);
 
     const allTransactions = [...recentPayments, ...recentExpenses]
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime())
         .slice(0, 50);
 
     // 6. Chart Data (Last 6 months)
@@ -169,6 +213,7 @@ router.get('/dashboard', async (req, res) => {
         total: sql<string>`sum(${payments.amount})`
     })
     .from(payments)
+    .where(timeFilter)
     .groupBy(payments.paymentMethod);
     
     const totalPaymentsCount = paymentMethodsStats.reduce((sum, item) => sum + item.count, 0);
@@ -193,16 +238,34 @@ router.get('/dashboard', async (req, res) => {
         
     const monthlyTarget = targetResult.length > 0 ? Number(targetResult[0].targetAmount) : 0;
 
+    // 9. Expense Categories (Filtered by Time Range)
+    const expenseCategoriesResult = await db.select({
+        category: expenses.category,
+        total: sql<string>`sum(${expenses.amount})`
+    })
+    .from(expenses)
+    .where(expenseTimeFilter)
+    .groupBy(expenses.category)
+    .orderBy(desc(sql`sum(${expenses.amount})`));
+
+    const expenseCategories = expenseCategoriesResult.map(item => ({
+        name: item.category,
+        value: Number(item.total || 0)
+    }));
+
     res.json({
         kpi: {
             totalRevenue, // Now filtered
             outstanding, // Still global
             opExpenses: totalExpenses, // Now filtered
-            netProfit // Now filtered
+            netProfit, // Now filtered
+            revenueChange,
+            expensesChange
         },
         transactions: allTransactions,
-        chartData, // Keeps 6 months history (independent of filter usually, or should we align? Let's leave clear 6 months context)
+        chartData, // Keeps 6 months history
         paymentMethods,
+        expenseCategories, // New field
         target: {
             currentRevenue: realizedRevenue,
             monthlyTarget
@@ -256,6 +319,135 @@ router.post('/target', async (req, res) => {
   } catch (error) {
     console.error('Error saving financial target:', error);
     res.status(500).json({ message: 'Failed to save target' });
+  }
+});
+
+// GET /api/finance/report - Financial report for export (Excel)
+router.get('/report', async (req, res) => {
+  try {
+    const { startDate, endDate, guesthouse } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({ message: 'startDate and endDate are required' });
+    }
+
+    const start = new Date(startDate as string);
+    const end = new Date(endDate as string);
+    end.setHours(23, 59, 59, 999); // Include the entire end date
+
+    // Parse guesthouse filter (0 or undefined = all, 1-5 = specific)
+    const guesthouseFilter = guesthouse ? parseInt(guesthouse as string) : 0;
+
+    // === INCOME: From reservations table ===
+    // Filter by check_in_date within date range
+    // If guesthouse filter is set, filter by room floor
+    let incomeQuery: any[] = [];
+    
+    if (guesthouseFilter > 0) {
+      // Get rooms on the specified floor (floor = guesthouse number)
+      const roomsOnFloor = await db.select({ id: sql<number>`id` })
+        .from(sql`rooms`)
+        .where(sql`floor = ${guesthouseFilter}`);
+      
+      const roomIds = roomsOnFloor.map(r => r.id);
+      
+      if (roomIds.length > 0) {
+        incomeQuery = await db.select()
+          .from(reservations)
+          .where(and(
+            gte(reservations.checkInDate, start.toISOString().split('T')[0]),
+            lt(reservations.checkInDate, end.toISOString().split('T')[0]),
+            sql`room_id IN (${sql.join(roomIds, sql`, `)})`
+          ));
+      } else {
+        incomeQuery = [];
+      }
+    } else {
+      // All guesthouses
+      incomeQuery = await db.select()
+        .from(reservations)
+        .where(and(
+          gte(reservations.checkInDate, start.toISOString().split('T')[0]),
+          lt(reservations.checkInDate, end.toISOString().split('T')[0])
+        ));
+    }
+
+    const incomeDetails = (incomeQuery as any[]).map((res: any) => ({
+      room_id: res.roomId || res.room_id,
+      order_id: res.orderId || res.order_id,
+      source: res.source,
+      check_in_date: res.checkInDate || res.check_in_date,
+      check_out_date: res.checkOutDate || res.check_out_date,
+      total_amount: Number(res.totalAmount || res.total_amount || 0),
+    }));
+
+    // === EXPENSES: Filter by date range and guesthouse column ===
+    let expenseQuery;
+    
+    if (guesthouseFilter > 0) {
+      // Filter by specific guesthouse
+      expenseQuery = await db.select({
+        id: expenses.id,
+        description: expenses.description,
+        category: expenses.category,
+        amount: expenses.amount,
+        date_incurred: expenses.dateIncurred,
+        notes: expenses.notes,
+        guesthouse: expenses.guesthouse,
+      })
+      .from(expenses)
+      .where(and(
+        gte(expenses.dateIncurred, start.toISOString().split('T')[0]),
+        lt(expenses.dateIncurred, end.toISOString().split('T')[0]),
+        eq(expenses.guesthouse, guesthouseFilter)
+      ));
+    } else {
+      // All guesthouses (0 means all, or guesthouse 1-5)
+      expenseQuery = await db.select({
+        id: expenses.id,
+        description: expenses.description,
+        category: expenses.category,
+        amount: expenses.amount,
+        date_incurred: expenses.dateIncurred,
+        notes: expenses.notes,
+        guesthouse: expenses.guesthouse,
+      })
+      .from(expenses)
+      .where(and(
+        gte(expenses.dateIncurred, start.toISOString().split('T')[0]),
+        lt(expenses.dateIncurred, end.toISOString().split('T')[0])
+      ));
+    }
+
+    const expenseDetails = expenseQuery.map((e: any) => ({
+      description: e.description,
+      category: e.category,
+      amount: Number(e.amount),
+      date_incurred: e.date_incurred,
+      notes: e.notes,
+      guesthouse: e.guesthouse,
+    }));
+
+    // Calculate totals
+    const totalIncome = incomeDetails.reduce((sum, i) => sum + i.total_amount, 0);
+    const totalExpense = expenseDetails.reduce((sum, e) => sum + e.amount, 0);
+    const netProfit = totalIncome - totalExpense;
+
+    res.json({
+      totalIncome,
+      totalExpense,
+      netProfit,
+      incomeDetails,
+      expenseDetails,
+      filter: {
+        startDate,
+        endDate,
+        guesthouse: guesthouseFilter,
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching finance report:', error);
+    res.status(500).json({ message: 'Failed to fetch finance report' });
   }
 });
 

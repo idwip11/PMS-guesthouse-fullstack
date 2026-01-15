@@ -195,15 +195,15 @@ export default function Housekeeping() {
                 <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Amenities</p>
                 <div className="space-y-2">
                   <label className="flex items-center gap-3 cursor-pointer">
-                    <input defaultChecked className="form-checkbox h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary" type="checkbox"/>
+                    <input className="form-checkbox h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary" type="checkbox"/>
                     <span className="text-sm text-slate-600 dark:text-slate-300">Towels</span>
                   </label>
                   <label className="flex items-center gap-3 cursor-pointer">
-                    <input defaultChecked className="form-checkbox h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary" type="checkbox"/>
+                    <input className="form-checkbox h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary" type="checkbox"/>
                     <span className="text-sm text-slate-600 dark:text-slate-300">Toiletries Kit</span>
                   </label>
                   <label className="flex items-center gap-3 cursor-pointer">
-                    <input defaultChecked className="form-checkbox h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary" type="checkbox"/>
+                    <input className="form-checkbox h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary" type="checkbox"/>
                     <span className="text-sm text-slate-600 dark:text-slate-300">Special Requests</span>
                   </label>
                 </div>

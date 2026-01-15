@@ -21,13 +21,16 @@ import cleaningTasksRouter from './routes/cleaningTasks';
 import financeRouter from './routes/finance';
 import marketingRouter from './routes/marketing';
 import uploadRouter from './routes/upload';
+import budgetsRouter from './routes/budgets';
 
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+}));
 app.use(cors());
 app.use(express.json());
 
@@ -61,6 +64,7 @@ app.use('/api/finance', financeRouter);
 app.use('/api/finance', financeRouter);
 app.use('/api/marketing', marketingRouter);
 app.use('/api/upload', uploadRouter);
+app.use('/api/budgets', budgetsRouter);
 
 // Serve uploaded files statically
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));

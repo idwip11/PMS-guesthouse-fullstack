@@ -23,6 +23,19 @@ interface GanttChartProps {
 
 const GanttChart = ({ rooms = [], days = [], bookings = [], onBookingClick }: GanttChartProps) => {
     // const [isBookingModalOpen, setIsBookingModalOpen] = useState(false); // Moved to parent
+    const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+    const hasScrolledRef = React.useRef(false);
+
+    React.useEffect(() => {
+        if (days.length > 0 && scrollContainerRef.current && !hasScrolledRef.current) {
+            const todayIndex = days.findIndex(d => d.isToday);
+            if (todayIndex !== -1) {
+                // Scroll so today is the first column after the sidebar
+                scrollContainerRef.current.scrollLeft = todayIndex * COL_WIDTH;
+                hasScrolledRef.current = true;
+            }
+        }
+    }, [days]);
 
   const getStatusBadge = (status: RoomStatus) => {
     switch (status) {
@@ -36,7 +49,7 @@ const GanttChart = ({ rooms = [], days = [], bookings = [], onBookingClick }: Ga
   return (
     <div className="flex-1 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col relative h-full">
       {/* Scrollable Container */}
-      <div className="flex-1 overflow-auto relative custom-scrollbar">
+      <div ref={scrollContainerRef} className="flex-1 overflow-auto relative custom-scrollbar">
         <div 
             className="grid" 
             style={{ 

@@ -31,11 +31,56 @@ export default function Header({ onNewBooking, onCreateInvoice, onNewTask, onLog
   const isOps = location.pathname === '/ops';
   const isHousekeeping = location.pathname === '/housekeeping';
 
+  // Weather State
+  const [weather, setWeather] = useState<{ temp: number; description: string } | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState(true);
+
   useEffect(() => {
+    // Weather Fetching Logic
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          try {
+             const { latitude, longitude } = position.coords;
+             const response = await fetch(
+               `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`
+             );
+             const data = await response.json();
+             
+             // Map WMO codes
+             const code = data.current_weather.weathercode;
+             let description = 'Sunny';
+             if (code === 0) description = 'Clear';
+             else if (code >= 1 && code <= 3) description = 'Partly Cloudy';
+             else if (code >= 45 && code <= 48) description = 'Foggy';
+             else if (code >= 51 && code <= 67) description = 'Rain';
+             else if (code >= 71 && code <= 77) description = 'Snow';
+             else if (code >= 80 && code <= 82) description = 'Showers';
+             else if (code >= 95) description = 'Thunderstorm';
+             
+             setWeather({
+               temp: Math.round(data.current_weather.temperature),
+               description
+             });
+          } catch (error) {
+             console.error('Weather fetch error:', error);
+          } finally {
+             setWeatherLoading(false);
+          }
+        }, 
+        (err) => {
+          console.error("Geo error", err);
+          setWeatherLoading(false);
+        }
+      );
+    } else {
+        setWeatherLoading(false);
+    }
+
     const handleClickOutside = (event: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
-        setShowResults(false);
-      }
+        if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+          setShowResults(false);
+        }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
@@ -75,7 +120,7 @@ export default function Header({ onNewBooking, onCreateInvoice, onNewTask, onLog
   const showSearch = !isSettings && !isSupport && !isMarketing && !isOps && !isHousekeeping;
 
   return (
-    <header className="h-20 glass flex items-center justify-between px-8 z-10 sticky top-0">
+    <header className="h-20 glass flex items-center justify-between px-8 z-50 sticky top-0">
       <div className="flex items-center gap-8">
         <h1 className="text-2xl font-bold text-slate-800 dark:text-white hidden sm:block">
           {getPageTitle()}
@@ -149,24 +194,27 @@ export default function Header({ onNewBooking, onCreateInvoice, onNewTask, onLog
       </div>
       <div className="flex items-center gap-4">
         {!isSettings && !isSupport && (
-          <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-300 text-sm font-medium">
-            <span className="material-icons-round text-base">wb_sunny</span>
-            <span>24°C Sunny</span>
+          <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-300 text-sm font-medium transition-all">
+            <span className="material-icons-round text-base">
+                {weatherLoading ? 'refresh' : weather?.description === 'Clear' ? 'wb_sunny' : 'cloud'}
+            </span>
+            <span>
+                {weatherLoading ? 'Loading...' : `${weather?.temp}°C ${weather?.description}`}
+            </span>
           </div>
         )}
         
-        <button className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 transition-colors relative">
-          <span className="material-icons-round">notifications</span>
-          <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-slate-800"></span>
-        </button>
-        
-        <button
-          className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 transition-colors"
-          onClick={toggleTheme}
-        >
-          <span className={`material-icons-round ${isDark ? 'hidden' : 'block'}`}>dark_mode</span>
-          <span className={`material-icons-round ${isDark ? 'block' : 'hidden'}`}>light_mode</span>
-        </button>
+        {!isSettings && (
+          <>
+            <button
+              className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 transition-colors"
+              onClick={toggleTheme}
+            >
+              <span className={`material-icons-round ${isDark ? 'hidden' : 'block'}`}>dark_mode</span>
+              <span className={`material-icons-round ${isDark ? 'block' : 'hidden'}`}>light_mode</span>
+            </button>
+          </>
+        )}
         
         {isFinance ? (
           <button 
@@ -201,13 +249,7 @@ export default function Header({ onNewBooking, onCreateInvoice, onNewTask, onLog
             New Task
           </button>
         ) : isSettings ? (
-          <div className="w-8 h-8 rounded-full overflow-hidden border-2 border-primary/20">
-             <img 
-               alt="User Profile" 
-               className="w-full h-full object-cover" 
-               src="https://lh3.googleusercontent.com/aida-public/AB6AXuCNSXNCj7DPN3th_aXaIkvHKcmzG_rAb-RYGpf4fKw5NalUSBY88IqEwofvcJpNRWMUy_kdAx8rH8l597GuswKhxhbcXsJEhczUrdq4ELjjjciMV0ljFmfcgDLZ2iO3_ZGvTmWJNESrDEPlpp8e_wwbnSYWZuRTGWOd3TTW93M275wHu-mEnvLhRWcrWeqUnuX1lVovgVmffLkRNZqFRtN8R3XJrFL1NXBB0xGcylkIUIsZ0GSNleAPwvqmt8PAqmaZOxn3Kim99Q"
-             />
-          </div>
+          null
         ) : (
           <button 
             className="bg-primary hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-medium shadow-lg shadow-blue-500/30 transition-all flex items-center gap-2"
@@ -221,5 +263,3 @@ export default function Header({ onNewBooking, onCreateInvoice, onNewTask, onLog
     </header>
   );
 };
-
-

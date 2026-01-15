@@ -34,38 +34,47 @@ export default function Support() {
           <div className="space-y-4">
             <details className="group glass-card rounded-xl overflow-hidden cursor-pointer" open>
               <summary className="flex items-center justify-between p-5 text-slate-800 dark:text-white font-semibold select-none">
-                How do I process a refund for a guest?
+                Why is the 'Payment Date' empty for OTA bookings?
                 <span className="material-icons-round text-slate-400 group-open:rotate-180 transition-transform duration-200">expand_more</span>
               </summary>
               <div className="px-5 pb-5 text-slate-600 dark:text-slate-300 text-sm leading-relaxed border-t border-gray-100 dark:border-gray-700/50 pt-4">
-                To process a refund, navigate to the 'Finance' tab, select the specific transaction ID, and click on the 'Issue Refund' button. You will need to provide a reason for the refund and approve the amount. Refunds typically take 3-5 business days to appear on the guest's statement.
+                Payments from OTAs (Booking.com, Agoda, etc.) are typically delayed. We leave the date empty so the system tracks it as "Outstanding". Once you receive the actual transfer, please update the date in the <strong>Billing & Payment</strong> tab.
               </div>
             </details>
             <details className="group glass-card rounded-xl overflow-hidden cursor-pointer">
               <summary className="flex items-center justify-between p-5 text-slate-800 dark:text-white font-semibold select-none">
-                Can I change the room rate for a specific date?
+                Why is my 'Total Revenue' lower than expected?
                 <span className="material-icons-round text-slate-400 group-open:rotate-180 transition-transform duration-200">expand_more</span>
               </summary>
               <div className="px-5 pb-5 text-slate-600 dark:text-slate-300 text-sm leading-relaxed border-t border-gray-100 dark:border-gray-700/50 pt-4">
-                Yes, go to 'Room Map' or 'Settings' &gt; 'Pricing'. Select the date range you wish to modify on the calendar view, click 'Edit Rate', and input the new price. You can also set dynamic pricing rules based on occupancy.
+                Revenue only counts payments that have been <strong>received</strong> (have a valid date). If a payment date is empty (OTA) or null, it is counted as "Outstanding Payment" instead.
               </div>
             </details>
             <details className="group glass-card rounded-xl overflow-hidden cursor-pointer">
               <summary className="flex items-center justify-between p-5 text-slate-800 dark:text-white font-semibold select-none">
-                How do I add a new staff member account?
+                How do I move an 'Outstanding' payment to 'Revenue'?
                 <span className="material-icons-round text-slate-400 group-open:rotate-180 transition-transform duration-200">expand_more</span>
               </summary>
               <div className="px-5 pb-5 text-slate-600 dark:text-slate-300 text-sm leading-relaxed border-t border-gray-100 dark:border-gray-700/50 pt-4">
-                Admins can add new users under 'Settings' &gt; 'User Management'. Click 'Add New User', fill in their details, and assign a role (e.g., Receptionist, Housekeeping, Manager). An invitation email will be sent to them to set their password.
+                Go to the booking details, switch to the <strong>Billing & Payment</strong> tab, and edit the payment to add the actual <strong>Payment Date</strong>.
               </div>
             </details>
             <details className="group glass-card rounded-xl overflow-hidden cursor-pointer">
               <summary className="flex items-center justify-between p-5 text-slate-800 dark:text-white font-semibold select-none">
-                What does the "Pending Verification" status mean?
+                How does the Loyalty Member auto-fill work?
                 <span className="material-icons-round text-slate-400 group-open:rotate-180 transition-transform duration-200">expand_more</span>
               </summary>
               <div className="px-5 pb-5 text-slate-600 dark:text-slate-300 text-sm leading-relaxed border-t border-gray-100 dark:border-gray-700/50 pt-4">
-                This status indicates that the guest has made a booking but their ID or payment method has not yet been verified by the system. You may need to manually verify their documents upon arrival.
+                When creating a reservation, simply type the <strong>Member ID</strong>. If the guest is a member, their name, phone, email, and points balance will automatically populate.
+              </div>
+            </details>
+            <details className="group glass-card rounded-xl overflow-hidden cursor-pointer">
+              <summary className="flex items-center justify-between p-5 text-slate-800 dark:text-white font-semibold select-none">
+                How do I mark a room as 'Dirty' or 'Maintenance'?
+                <span className="material-icons-round text-slate-400 group-open:rotate-180 transition-transform duration-200">expand_more</span>
+              </summary>
+              <div className="px-5 pb-5 text-slate-600 dark:text-slate-300 text-sm leading-relaxed border-t border-gray-100 dark:border-gray-700/50 pt-4">
+                Go to the <strong>Room Map</strong> (Sidebar) or <strong>Housekeeping</strong> page. Click on any room card to change its status immediately.
               </div>
             </details>
           </div>

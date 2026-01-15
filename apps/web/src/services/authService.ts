@@ -7,6 +7,7 @@ export interface AuthUser {
   username: string;
   fullName: string;
   role: string;
+  avatarUrl?: string;
   createdAt: string;
 }
 
@@ -58,4 +59,20 @@ export function getCurrentUser(): AuthUser | null {
 // Check if user is authenticated
 export function isAuthenticated(): boolean {
   return getCurrentUser() !== null;
+}
+
+// Update password
+export async function updatePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/auth/password`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ userId, currentPassword, newPassword }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'Password update failed' }));
+    throw new Error(error.message || 'Failed to update password');
+  }
 }

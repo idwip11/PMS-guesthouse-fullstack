@@ -34,7 +34,7 @@ router.get('/:id', async (req, res) => {
 // POST /api/expenses - Create a new expense
 router.post('/', async (req, res) => {
   try {
-    const { loggedByUserId, description, category, amount, dateIncurred, notes, status, receiptUrl } = req.body;
+    const { loggedByUserId, description, category, amount, dateIncurred, notes, status, receiptUrl, guesthouse } = req.body;
 
     if (!description || !category || !amount || !dateIncurred) {
       return res.status(400).json({ message: 'description, category, amount, and dateIncurred are required' });
@@ -49,6 +49,7 @@ router.post('/', async (req, res) => {
       notes,
       status: status || 'Pending',
       receiptUrl,
+      guesthouse: guesthouse || 0,
     }).returning();
 
     res.status(201).json(newExpense[0]);
@@ -62,10 +63,10 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { loggedByUserId, description, category, amount, dateIncurred, notes, status, receiptUrl } = req.body;
+    const { loggedByUserId, description, category, amount, dateIncurred, notes, status, receiptUrl, guesthouse } = req.body;
 
     const updatedExpense = await db.update(expenses)
-      .set({ loggedByUserId, description, category, amount, dateIncurred, notes, status, receiptUrl })
+      .set({ loggedByUserId, description, category, amount, dateIncurred, notes, status, receiptUrl, guesthouse })
       .where(eq(expenses.id, id))
       .returning();
 

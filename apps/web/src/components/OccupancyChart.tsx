@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useMemo } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -12,6 +12,7 @@ import {
 } from 'chart.js';
 import type { ScriptableContext } from 'chart.js';
 import { Line } from 'react-chartjs-2';
+import type { Reservation } from '../types';
 
 ChartJS.register(
   CategoryScale,
@@ -24,10 +25,56 @@ ChartJS.register(
   Legend
 );
 
-const OccupancyChart = () => {
+interface OccupancyChartProps {
+  reservations?: Reservation[];
+  totalRooms?: number;
+  year?: number;
+}
+
+const OccupancyChart = ({ reservations = [], totalRooms = 0, year = new Date().getFullYear() }: OccupancyChartProps) => {
   const chartRef = useRef<any>(null);
+
+  // Calculate monthly occupancy
+  const monthlyOccupancy = useMemo(() => {
+    const labels = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    
+    const data = labels.map((_, monthIndex) => {
+      if (totalRooms === 0) return 0;
+
+      const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+      const potentialRoomNights = totalRooms * daysInMonth;
+      
+      let occupiedNights = 0;
+      reservations.forEach(res => {
+        if (res.status === 'Cancelled') return;
+        
+        const start = new Date(res.checkInDate);
+        const end = new Date(res.checkOutDate);
+        const filterStart = new Date(year, monthIndex, 1);
+        const filterEnd = new Date(year, monthIndex + 1, 0);
+        
+        // Intersection
+        const effectiveStart = start < filterStart ? filterStart : start;
+        const effectiveEnd = end > filterEnd ? filterEnd : end;
+        
+        if (effectiveStart < effectiveEnd) {
+          const diffTime = Math.abs(effectiveEnd.getTime() - effectiveStart.getTime());
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          occupiedNights += diffDays;
+        }
+      });
+      
+      return Math.round((occupiedNights / potentialRoomNights) * 100);
+    });
+
+    return { labels, data };
+  }, [reservations, totalRooms, year]);
+
   const [chartData, setChartData] = useState<any>({
-    labels: ['1', '5', '10', '15', '20', '25', '30'],
+    labels: monthlyOccupancy.labels,
     datasets: [],
   });
 
@@ -46,11 +93,11 @@ const OccupancyChart = () => {
     };
 
     setChartData({
-      labels: ['1', '5', '10', '15', '20', '25', '30'],
+      labels: monthlyOccupancy.labels,
       datasets: [
         {
           label: 'Occupancy %',
-          data: [65, 72, 68, 85, 80, 92, 78],
+          data: monthlyOccupancy.data,
           borderColor: '#2563EB',
           backgroundColor: (context: ScriptableContext<'line'>) => {
             const ctx = context.chart.ctx;
@@ -71,7 +118,7 @@ const OccupancyChart = () => {
         },
       ],
     });
-  }, []);
+  }, [monthlyOccupancy]);
 
   const options = {
     responsive: true,

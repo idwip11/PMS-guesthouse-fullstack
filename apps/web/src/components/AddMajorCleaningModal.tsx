@@ -110,7 +110,7 @@ export default function AddMajorCleaningModal({ isOpen, onClose, onSuccess, edit
   return (
     <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0'}`} style={{ backdropFilter: 'blur(4px)' }}>
       <div className="absolute inset-0 bg-slate-900/40 dark:bg-black/60 transition-opacity" onClick={onClose}></div>
-      <div className={`relative w-full max-w-lg glass-card rounded-2xl shadow-2xl overflow-hidden transform transition-all duration-300 ${isOpen ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}>
+      <div className={`relative w-full max-w-lg glass-card rounded-2xl shadow-2xl transform transition-all duration-300 ${isOpen ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}>
         <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700/50 flex items-center justify-between">
           <h3 className="text-lg font-bold text-slate-800 dark:text-white">
             {editTask ? 'Edit' : 'Add'} Major Cleaning Item
@@ -192,7 +192,7 @@ export default function AddMajorCleaningModal({ isOpen, onClose, onSuccess, edit
                   )}
                 </div>
                 {isUserDropdownOpen && (
-                  <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-100 dark:border-slate-700 max-h-60 overflow-y-auto z-10">
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-100 dark:border-slate-700 max-h-60 overflow-y-auto z-50">
                     <div className="p-2 space-y-1">
                       {users.map((user) => (
                         <div
@@ -234,7 +234,7 @@ export default function AddMajorCleaningModal({ isOpen, onClose, onSuccess, edit
               </div>
             </div>
           </div>
-          <div className="px-6 py-4 bg-slate-50/50 dark:bg-slate-800/30 border-t border-gray-100 dark:border-gray-700/50 flex items-center justify-end gap-3">
+          <div className="px-6 py-4 bg-slate-50/50 dark:bg-slate-800/30 border-t border-gray-100 dark:border-gray-700/50 flex items-center justify-end gap-3 rounded-b-2xl">
             <button 
               type="button"
               onClick={onClose}

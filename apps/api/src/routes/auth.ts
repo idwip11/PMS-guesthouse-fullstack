@@ -49,4 +49,46 @@ router.get('/me', async (req: Request, res: Response) => {
   return res.status(401).json({ message: 'Not authenticated' });
 });
 
+// PUT /api/auth/password - Update user password
+router.put('/password', async (req: Request, res: Response) => {
+  try {
+    const { userId, currentPassword, newPassword } = req.body;
+
+    if (!userId || !currentPassword || !newPassword) {
+      return res.status(400).json({ message: 'userId, currentPassword, and newPassword are required' });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({ message: 'New password must be at least 8 characters long' });
+    }
+
+    // Find user by ID
+    const user = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (user.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Verify current password (plain text for now - TODO: use bcrypt in production)
+    if (user[0].passwordHash !== currentPassword) {
+      return res.status(401).json({ message: 'Current password is incorrect' });
+    }
+
+    // Update password
+    await db
+      .update(users)
+      .set({ passwordHash: newPassword })
+      .where(eq(users.id, userId));
+
+    return res.json({ message: 'Password updated successfully' });
+  } catch (error) {
+    console.error('Password update error:', error);
+    return res.status(500).json({ message: 'An error occurred while updating password' });
+  }
+});
+
 export default router;

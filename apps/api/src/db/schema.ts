@@ -9,6 +9,7 @@ export const users = pgTable('users', {
   passwordHash: text('password_hash').notNull(),
   fullName: text('full_name').notNull(),
   role: text('role').notNull().default('Staff'), // Admin, Receptionist, Housekeeper
+  avatarUrl: text('avatar_url'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -65,7 +66,7 @@ export const payments = pgTable('payments', {
   reservationId: uuid('reservation_id').references(() => reservations.id).notNull(),
   orderId: text('order_id'), // Denormalized for easier querying
   amount: decimal('amount', { precision: 10, scale: 2 }).notNull(),
-  paymentDate: date('payment_date').defaultNow().notNull(),
+  paymentDate: date('payment_date'), // Nullable for OTA bookings where date is uncertain
   paymentMethod: text('payment_method'), // Cash, Credit Card, Transfer
   notes: text('notes'), // Optional note for the payment
   type: text('type').default('Payment'), // DP, Additional Charges, Completed
@@ -94,6 +95,7 @@ export const expenses = pgTable('expenses', {
   notes: text('notes'), // Additional details
   status: text('status').default('Pending'), // Pending, Approved, Rejected
   receiptUrl: text('receipt_url'),
+  guesthouse: integer('guesthouse').default(0).notNull(), // 0 = All, 1-5 = Guesthouse 1-5
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -105,6 +107,7 @@ export const inventoryItems = pgTable('inventory_items', {
   currentStock: integer('current_stock').notNull().default(0),
   minThreshold: integer('min_threshold').notNull().default(10),
   unit: text('unit').default('pcs'),
+  contactVendor: text('contact_vendor'),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
@@ -184,3 +187,22 @@ export const loyaltyMembers = pgTable('loyalty_members', {
   lastActivity: timestamp('last_activity').defaultNow(),
 });
 
+// Operational Budgets Table
+export const operationalBudgets = pgTable('operational_budgets', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  year: integer('year').notNull(),
+  month: integer('month').notNull(), // 1-12
+  projectedAmount: decimal('projected_amount', { precision: 10, scale: 2 }).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// Marketing Budgets Table
+export const marketingBudgets = pgTable('marketing_budgets', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  year: integer('year').notNull(),
+  month: integer('month').notNull(), // 1-12
+  budgetAmount: decimal('budget_amount', { precision: 10, scale: 2 }).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});

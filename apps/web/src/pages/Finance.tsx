@@ -4,6 +4,7 @@ import FinanceChart from '../components/FinanceChart';
 import { financeApi } from '../services/api';
 
 import TargetSetupModal from '../components/TargetSetupModal';
+import ExpenseCategoryChart from '../components/ExpenseCategoryChart';
 
 export default function Finance() {
   const [dashboardData, setDashboardData] = useState<any>(null);
@@ -14,6 +15,7 @@ export default function Finance() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [isTargetModalOpen, setIsTargetModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'all' | 'inflow' | 'outflow'>('all');
 
   useEffect(() => {
     fetchDashboard();
@@ -70,6 +72,14 @@ export default function Finance() {
     }).format(amount);
   };
 
+  // Filter transactions based on active tab
+  const filteredTransactions = transactions.filter((trx: any) => {
+    if (activeTab === 'all') return true;
+    if (activeTab === 'inflow') return trx.type === 'Inflow';
+    if (activeTab === 'outflow') return trx.type === 'Outflow';
+    return true;
+  });
+
   return (
     <div className="max-w-7xl mx-auto space-y-8">
       {/* Header with Filters */}
@@ -106,8 +116,13 @@ export default function Finance() {
             <div className="p-2.5 bg-green-50 dark:bg-green-900/20 rounded-xl text-green-600 dark:text-green-400 border border-green-100 dark:border-green-800">
               <span className="material-icons-round">monetization_on</span>
             </div>
-            <span className="text-xs font-medium text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded-full flex items-center gap-0.5">
-              <span className="material-icons-round text-sm">trending_up</span> +12.5%
+            <span className={`text-xs font-medium px-2 py-1 rounded-full flex items-center gap-0.5 ${
+                kpi.revenueChange >= 0 
+                ? 'text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30' 
+                : 'text-red-500 dark:text-red-400 bg-red-100 dark:bg-red-900/30'
+            }`}>
+              <span className="material-icons-round text-sm">{kpi.revenueChange >= 0 ? 'trending_up' : 'trending_down'}</span> 
+              {kpi.revenueChange > 0 ? '+' : ''}{kpi.revenueChange.toFixed(1)}%
             </span>
           </div>
           <div>
@@ -135,8 +150,13 @@ export default function Finance() {
             <div className="p-2.5 bg-blue-50 dark:bg-blue-900/20 rounded-xl text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800">
               <span className="material-icons-round">shopping_bag</span>
             </div>
-            <span className="text-xs font-medium text-red-500 dark:text-red-400 bg-red-100 dark:bg-red-900/30 px-2 py-1 rounded-full flex items-center gap-0.5">
-              <span className="material-icons-round text-sm">trending_up</span> +2.1%
+            <span className={`text-xs font-medium px-2 py-1 rounded-full flex items-center gap-0.5 ${
+                kpi.expensesChange <= 0 
+                ? 'text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30' 
+                : 'text-red-500 dark:text-red-400 bg-red-100 dark:bg-red-900/30'
+            }`}>
+              <span className="material-icons-round text-sm">{kpi.expensesChange > 0 ? 'trending_up' : 'trending_down'}</span> 
+              {kpi.expensesChange > 0 ? '+' : ''}{kpi.expensesChange.toFixed(1)}%
             </span>
           </div>
           <div>
@@ -167,15 +187,26 @@ export default function Finance() {
           {/* Controls */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div className="flex p-1 bg-slate-100 dark:bg-slate-800/50 rounded-xl">
-              <button className="px-4 py-2 text-sm font-semibold text-primary bg-white dark:bg-slate-700 shadow-sm rounded-lg transition-all">All Transactions</button>
-              <button className="px-4 py-2 text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors">Invoices</button>
-              <button className="px-4 py-2 text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors">Expenses</button>
-            </div>
-            <div className="flex items-center gap-3 w-full sm:w-auto">
-              <button className="flex items-center justify-center p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/50 rounded-xl text-slate-600 dark:text-slate-300 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                <span className="material-icons-round">file_download</span>
+              <button 
+                onClick={() => setActiveTab('all')}
+                className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${activeTab === 'all' ? 'text-primary bg-white dark:bg-slate-700 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'}`}
+              >
+                All Transactions
+              </button>
+              <button 
+                onClick={() => setActiveTab('inflow')}
+                className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${activeTab === 'inflow' ? 'text-primary bg-white dark:bg-slate-700 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'}`}
+              >
+                Invoices
+              </button>
+              <button 
+                onClick={() => setActiveTab('outflow')}
+                className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${activeTab === 'outflow' ? 'text-primary bg-white dark:bg-slate-700 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'}`}
+              >
+                Expenses
               </button>
             </div>
+
           </div>
 
           {/* Table */}
@@ -188,18 +219,17 @@ export default function Finance() {
                     <th className="px-6 py-4 font-medium">Description</th>
                     <th className="px-6 py-4 font-medium">Date</th>
                     <th className="px-6 py-4 font-medium">Amount</th>
-                    <th className="px-6 py-4 font-medium text-right">Status</th>
                   </tr>
                 </thead>
                 <tbody className="text-sm divide-y divide-gray-100 dark:divide-gray-700/50">
-                  {transactions.length === 0 ? (
+                  {filteredTransactions.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
+                      <td colSpan={4} className="px-6 py-8 text-center text-slate-500">
                         No transactions found.
                       </td>
                     </tr>
                   ) : (
-                    transactions.map((trx: any) => (
+                    filteredTransactions.map((trx: any) => (
                       <tr key={trx.id + trx.type} className="group hover:bg-slate-50 dark:hover:bg-slate-700/20 transition-colors">
                         <td className="px-6 py-4 font-mono text-slate-500 dark:text-slate-400">
                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
@@ -220,11 +250,6 @@ export default function Finance() {
                         <td className={`px-6 py-4 font-bold ${trx.type === 'Inflow' ? 'text-green-600 dark:text-green-400' : 'text-slate-800 dark:text-slate-200'}`}>
                             {trx.type === 'Outflow' ? '-' : '+'}{formatCurrency(trx.amount)}
                         </td>
-                        <td className="px-6 py-4 text-right">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
-                            {trx.status}
-                          </span>
-                        </td>
                       </tr>
                     ))
                   )}
@@ -236,11 +261,10 @@ export default function Finance() {
           
            {/* Added Scrollable Content: Expense Breakdown & Monthly Targets */}
            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="glass-card p-6 rounded-2xl">
+                <div className="glass-card p-6 rounded-2xl h-80 flex flex-col">
                     <h3 className="font-bold text-slate-800 dark:text-white mb-4">Expense Categories</h3>
-                    {/* Placeholder for Expense Categories logic */}
-                    <div className="flex items-center justify-center h-32 text-slate-400 text-sm">
-                        Chart data not yet implemented
+                    <div className="flex-1 min-h-0">
+                        <ExpenseCategoryChart data={dashboardData?.expenseCategories || []} />
                     </div>
                 </div>
 

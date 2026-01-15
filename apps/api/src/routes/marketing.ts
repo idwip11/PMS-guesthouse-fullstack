@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db';
-import { marketingCampaigns, loyaltyMembers, guests, reservations, rooms } from '../db/schema';
+import { marketingCampaigns, loyaltyMembers, guests, reservations, rooms, expenses, marketingBudgets } from '../db/schema';
 import { eq, desc, sql, gt } from 'drizzle-orm';
 
 const router = Router();
@@ -60,9 +60,14 @@ router.get('/export', async (req, res) => {
   }
 });
 
-// GET real-time member stats
+// GET real-time member stats + Marketing Dashboard Data
 router.get('/stats', async (req, res) => {
   try {
+    const { month, year } = req.query;
+    const targetMonth = month ? Number(month) : new Date().getMonth() + 1;
+    const targetYear = year ? Number(year) : new Date().getFullYear();
+
+    // 1. Member Stats (All time)
     const totalMembersResult = await db.select({
       count: sql<number>`count(distinct ${loyaltyMembers.memberId})`
     }).from(loyaltyMembers);
@@ -76,13 +81,123 @@ router.get('/stats', async (req, res) => {
     .from(loyaltyMembers)
     .where(gt(loyaltyMembers.joinedAt, sevenDaysAgo));
 
+    // 2. Booking Source Distribution
+    const sourceDistribution = await db.select({
+      source: reservations.source,
+      count: sql<number>`count(*)`,
+      revenue: sql<number>`sum(${reservations.totalAmount})`
+    })
+    .from(reservations)
+    .groupBy(reservations.source);
+
+    // 3. Marketing ROI (Monthly)
+    // Marketing Spend (Expenses category = 'Marketing') for target month/year
+    const marketingSpendResult = await db.execute(sql`
+      SELECT sum(amount) as total 
+      FROM expenses 
+      WHERE category = 'Marketing'
+      AND EXTRACT(MONTH FROM date_incurred) = ${targetMonth}
+      AND EXTRACT(YEAR FROM date_incurred) = ${targetYear}
+    `);
+
+    const marketingSpend = Number(marketingSpendResult[0]?.total || 0);
+
+    // Total Revenue (All reservations) for target month/year
+    const totalRevenueResult = await db.execute(sql`
+      SELECT sum(total_amount) as total
+      FROM reservations
+      WHERE EXTRACT(MONTH FROM created_at) = ${targetMonth}
+      AND EXTRACT(YEAR FROM created_at) = ${targetYear}
+    `);
+
+    const totalRevenue = Number(totalRevenueResult[0]?.total || 0);
+
+    // Fetch Budget for target month/year
+    const budgetResult = await db.select()
+      .from(marketingBudgets)
+      .where(sql`${marketingBudgets.month} = ${targetMonth} AND ${marketingBudgets.year} = ${targetYear}`);
+    
+    const marketingBudget = budgetResult.length > 0 ? Number(budgetResult[0].budgetAmount) : 0;
+
+    // ROI Calculation: (Revenue - Budget) / Budget
+    // If no budget is set, fallback to (Revenue - Spend) / Spend? 
+    // User requested "based on configured budget". If budget is 0, ROI is undefined/Infinite.
+    // Let's return the raw numbers so frontend can decide.
+
+    // 4. Booking Lead Time (Avg check_in - created_at)
+    const leadTimeResult = await db.select({
+      avgDays: sql<number>`AVG(DATE_PART('day', ${reservations.checkInDate}::timestamp - ${reservations.createdAt}::timestamp))`
+    })
+    .from(reservations);
+
+    const avgLeadTime = Math.round(Number(leadTimeResult[0]?.avgDays || 0));
+
     res.json({
       totalMembers: Number(totalMembersResult[0]?.count || 0),
-      newMembersThisWeek: Number(newMembersResult[0]?.count || 0)
+      newMembersThisWeek: Number(newMembersResult[0]?.count || 0),
+      sourceDistribution: sourceDistribution.map(item => ({
+        source: item.source || 'Direct',
+        count: Number(item.count),
+        revenue: Number(item.revenue || 0)
+      })),
+      marketingROI: {
+        spend: marketingSpend,
+        revenue: totalRevenue,
+        budget: marketingBudget
+      },
+      leadTime: avgLeadTime
     });
   } catch (error) {
     console.error('Error fetching member stats:', error);
     res.status(500).json({ message: 'Failed to fetch member stats' });
+  }
+});
+
+// GET Budget for a year
+router.get('/budgets/:year', async (req, res) => {
+  try {
+    const { year } = req.params;
+    const budgets = await db.select()
+      .from(marketingBudgets)
+      .where(eq(marketingBudgets.year, parseInt(year)));
+    res.json(budgets);
+  } catch (error) {
+    console.error('Error fetching budgets:', error);
+    res.status(500).json({ message: 'Failed to fetch budgets' });
+  }
+});
+
+// POST/PUT Upsert Budget
+router.post('/budgets', async (req, res) => {
+  try {
+    const { month, year, amount } = req.body;
+    
+    // Check if exists
+    const existing = await db.select()
+      .from(marketingBudgets)
+      .where(sql`${marketingBudgets.month} = ${month} AND ${marketingBudgets.year} = ${year}`);
+
+    if (existing.length > 0) {
+      // Update
+      const [updated] = await db.update(marketingBudgets)
+        .set({ budgetAmount: amount, updatedAt: new Date() })
+        .where(eq(marketingBudgets.id, existing[0].id))
+        .returning();
+      res.json(updated);
+    } else {
+      // Insert
+      const [inserted] = await db.insert(marketingBudgets)
+        .values({
+          month,
+          year,
+          budgetAmount: amount
+        })
+        .returning();
+      res.json(inserted);
+    }
+  } catch (error) {
+    console.error('Error saving budget:', error);
+    res.status(500).json({ message: 'Failed to save budget' });
   }
 });
 
@@ -196,6 +311,75 @@ router.get('/loyalty-members', async (req, res) => {
   } catch (error) {
     console.error('Error fetching loyalty members:', error);
     res.status(500).json({ message: 'Failed to fetch loyalty members' });
+  }
+});
+
+// PUT update loyalty member points
+router.put('/loyalty-members/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { pointsBalance } = req.body;
+
+    const [updatedMember] = await db.update(loyaltyMembers)
+      .set({ pointsBalance: Number(pointsBalance) })
+      .where(eq(loyaltyMembers.id, id))
+      .returning();
+
+    if (!updatedMember) {
+      return res.status(404).json({ message: 'Member not found' });
+    }
+
+    res.json(updatedMember);
+  } catch (error) {
+    console.error('Error updating member:', error);
+    res.status(500).json({ message: 'Failed to update member' });
+  }
+});
+
+// DELETE loyalty member
+router.delete('/loyalty-members/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.delete(loyaltyMembers).where(eq(loyaltyMembers.id, id));
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting member:', error);
+    res.status(500).json({ message: 'Failed to delete member' });
+  }
+});
+
+// GET lookup member details for auto-fill
+router.get('/lookup-member/:memberId', async (req, res) => {
+  try {
+    const { memberId } = req.params;
+    
+    // Find the most recent reservation with this memberId to get guest details
+    const recentBooking = await db.select({
+       fullName: guests.fullName,
+       email: guests.email,
+       phone: guests.phone,
+       origin: guests.origin,
+       notes: guests.notes
+    })
+    .from(reservations)
+    .leftJoin(guests, eq(reservations.guestId, guests.id))
+    .where(eq(reservations.memberId, memberId))
+    .orderBy(desc(reservations.createdAt))
+    .limit(1);
+
+    if (recentBooking.length === 0) {
+      // Also determine if member exists in loyalty table even if no reservation found (edge case)
+      const loyaltyRecord = await db.select().from(loyaltyMembers).where(eq(loyaltyMembers.memberId, memberId));
+      if (loyaltyRecord.length > 0) {
+         return res.status(200).json({ found: true, details: null }); // Exists but no guest data to autofill?
+      }
+      return res.status(404).json({ message: 'Member not found' });
+    }
+
+    res.json(recentBooking[0]);
+  } catch (error) {
+    console.error('Error looking up member:', error);
+    res.status(500).json({ message: 'Failed to lookup member' });
   }
 });
 

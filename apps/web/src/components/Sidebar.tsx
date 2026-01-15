@@ -1,10 +1,19 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
+import { getCurrentUser, logout, type AuthUser } from '../services/authService';
 
 const Sidebar = () => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const currentUser = getCurrentUser();
+    if (currentUser) {
+      setUser(currentUser);
+    }
+  }, []);
 
   const navItems = [
     { name: 'Dashboard', path: '/dashboard', icon: 'dashboard' },
@@ -21,7 +30,7 @@ const Sidebar = () => {
   ];
 
   const handleLogout = () => {
-    // Add any logout logic here (e.g., clearing tokens)
+    logout();
     navigate('/login');
   };
 
@@ -46,9 +55,12 @@ const Sidebar = () => {
   return (
     <aside className="w-64 flex-shrink-0 z-20 hidden md:flex flex-col glass border-r border-gray-200 dark:border-gray-700 transition-all duration-300">
       <div className="h-20 flex items-center px-8 border-b border-gray-100 dark:border-gray-700/50">
-        <div className="flex items-center gap-2 text-primary font-bold text-2xl tracking-tight">
-          <span className="material-icons-round text-3xl">maps_home_work</span>
-          HomiQ
+        <div className="flex items-center">
+          <img 
+            src="/homiq-logo.png" 
+            alt="HomiQ" 
+            className="h-10 w-auto object-contain"
+          />
         </div>
       </div>
       <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1">
@@ -77,15 +89,15 @@ const Sidebar = () => {
           className="flex items-center gap-3 p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700/50 cursor-pointer transition-colors"
         >
           <img
-            alt="User Profile"
+            alt={user?.fullName || 'User Profile'}
             className="w-10 h-10 rounded-full object-cover border-2 border-white dark:border-gray-600 shadow-sm"
-            src="https://lh3.googleusercontent.com/aida-public/AB6AXuCNSXNCj7DPN3th_aXaIkvHKcmzG_rAb-RYGpf4fKw5NalUSBY88IqEwofvcJpNRWMUy_kdAx8rH8l597GuswKhxhbcXsJEhczUrdq4ELjjjciMV0ljFmfcgDLZ2iO3_ZGvTmWJNESrDEPlpp8e_wwbnSYWZuRTGWOd3TTW93M275wHu-mEnvLhRWcrWeqUnuX1lVovgVmffLkRNZqFRtN8R3XJrFL1NXBB0xGcylkIUIsZ0GSNleAPwvqmt8PAqmaZOxn3Kim99Q"
+            src={user?.avatarUrl ? `http://localhost:3000${user.avatarUrl}` : `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.fullName || 'User')}&background=random`}
           />
           <div className="flex flex-col">
             <span className="text-sm font-semibold text-slate-800 dark:text-white">
-              Sarah Jenkins
+              {user?.fullName || 'Guest'}
             </span>
-            <span className="text-xs text-slate-500 dark:text-slate-400">Manager</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400">{user?.role || 'Visitor'}</span>
           </div>
         </div>
       </div>

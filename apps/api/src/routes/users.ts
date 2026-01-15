@@ -13,6 +13,7 @@ router.get('/', async (req, res) => {
       username: users.username,
       fullName: users.fullName,
       role: users.role,
+      avatarUrl: users.avatarUrl,
       createdAt: users.createdAt,
     }).from(users);
     res.json(allUsers);
@@ -31,6 +32,7 @@ router.get('/:id', async (req, res) => {
       username: users.username,
       fullName: users.fullName,
       role: users.role,
+      avatarUrl: users.avatarUrl,
       createdAt: users.createdAt,
     }).from(users).where(eq(users.id, id));
 
@@ -81,16 +83,17 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { username, fullName, role } = req.body;
+    const { username, fullName, role, avatarUrl } = req.body;
 
     const updatedUser = await db.update(users)
-      .set({ username, fullName, role })
+      .set({ username, fullName, role, avatarUrl })
       .where(eq(users.id, id))
       .returning({
         id: users.id,
         username: users.username,
         fullName: users.fullName,
         role: users.role,
+        avatarUrl: users.avatarUrl,
         createdAt: users.createdAt,
       });
 

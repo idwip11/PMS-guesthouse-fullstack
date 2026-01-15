@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { roomsApi, reservationsApi } from '../services/api';
+import { roomsApi, reservationsApi, marketingApi } from '../services/api';
 import type { Room } from '../types';
 
 interface NewBookingModalProps {
@@ -149,6 +149,29 @@ export default function NewBookingModal({ isOpen, onClose }: NewBookingModalProp
       fetchRooms();
     }
   }, [isOpen]);
+
+  const handleMemberIdBlur = async () => {
+    if (!guestDetails.memberId) return;
+    
+    try {
+       const member = await marketingApi.lookupMember(guestDetails.memberId);
+       if (member) {
+           setGuestDetails(prev => ({
+               ...prev,
+               fullName: member.fullName || prev.fullName,
+               email: member.email || prev.email,
+               phone: member.phone || prev.phone,
+               origin: member.origin || prev.origin,
+           }));
+           if (member.notes && !notes) {
+               setNotes(member.notes);
+           }
+       }
+    } catch (error) {
+        // Silent fail as member might not exist yet
+        console.log('Member details not found for auto-fill');
+    }
+  };
 
   const fetchRooms = async () => {
     try {
@@ -329,6 +352,7 @@ export default function NewBookingModal({ isOpen, onClose }: NewBookingModalProp
                             type="text" 
                             value={guestDetails.memberId || ''}
                             onChange={(e) => setGuestDetails({...guestDetails, memberId: e.target.value})}
+                            onBlur={handleMemberIdBlur}
                           />
                           <span className="material-icons-round absolute right-3 top-2.5 text-gray-400 text-[20px]">badge</span>
                         </div>
@@ -444,13 +468,17 @@ export default function NewBookingModal({ isOpen, onClose }: NewBookingModalProp
                         <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">Payment Date</label>
                         <div className="relative">
                           <input 
-                            className="w-full bg-white dark:bg-[#1c2230] border border-gray-200 dark:border-gray-700 rounded-lg h-11 px-4 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-sm text-[#111318] dark:text-white outline-none cursor-pointer" 
+                            className={`w-full bg-white dark:bg-[#1c2230] border border-gray-200 dark:border-gray-700 rounded-lg h-11 px-4 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-sm text-[#111318] dark:text-white outline-none ${billingDetails.source !== 'Direct / Walk-in' ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                             type="date"
                             value={billingDetails.paymentDate}
                             onChange={(e) => setBillingDetails({...billingDetails, paymentDate: e.target.value})}
+                            disabled={billingDetails.source !== 'Direct / Walk-in'}
                           />
                           <span className="material-icons-round absolute right-3 top-2.5 text-gray-400 text-[20px] pointer-events-none">calendar_today</span>
                         </div>
+                        {billingDetails.source !== 'Direct / Walk-in' && (
+                          <p className="text-xs text-gray-400 mt-1.5 italic">OTA payments are handled in Billing & Payment tab after booking.</p>
+                        )}
                       </div>
                       <div className="col-span-12">
                         <label className="flex items-center gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-[#1c2230] cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group">

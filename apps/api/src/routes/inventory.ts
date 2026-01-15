@@ -34,7 +34,7 @@ router.get('/:id', async (req, res) => {
 // POST /api/inventory - Create a new inventory item
 router.post('/', async (req, res) => {
   try {
-    const { name, category, currentStock, minThreshold, unit } = req.body;
+    const { name, category, currentStock, minThreshold, unit, contactVendor } = req.body;
 
     if (!name || !category) {
       return res.status(400).json({ message: 'name and category are required' });
@@ -46,6 +46,7 @@ router.post('/', async (req, res) => {
       currentStock: currentStock || 0,
       minThreshold: minThreshold || 10,
       unit: unit || 'pcs',
+      contactVendor: contactVendor || '',
     }).returning();
 
     res.status(201).json(newItem[0]);
@@ -59,10 +60,10 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, category, currentStock, minThreshold, unit } = req.body;
+    const { name, category, currentStock, minThreshold, unit, contactVendor } = req.body;
 
     const updatedItem = await db.update(inventoryItems)
-      .set({ name, category, currentStock, minThreshold, unit })
+      .set({ name, category, currentStock, minThreshold, unit, contactVendor })
       .where(eq(inventoryItems.id, id))
       .returning();
 
