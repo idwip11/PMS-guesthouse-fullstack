@@ -11,5 +11,20 @@
     "rootDir": "./src"
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    "src/db/seed.ts",
+    "src/db/migrate.ts",
+    "src/add_avatar_column.ts",
+    "src/add_guesthouse_to_expenses.ts",
+    "src/check_loyalty.ts",
+    "src/create_budgets_table.ts",
+    "src/create_marketing_budgets_table.ts",
+    "src/fix_order_id_type.ts",
+    "src/fix_toiletries.ts",
+    "src/manual_migrate.ts",
+    "src/manual_migrate_loyalty.ts",
+    "src/manual_migrate_member_id.ts",
+    "src/migrate_payment_date.ts"
+  ]
 }
