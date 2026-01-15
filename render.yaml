@@ -1,12 +1,11 @@
-services:
-  # Database (PostgreSQL)
-  - type: psql
-    name: homiq-db
+databases:
+  - name: homiq-db
     plan: free
     region: singapore
     databaseName: homiq_pms
     user: homiq_user
 
+services:
   # Backend API (Web Service)
   - type: web
     name: homiq-api
