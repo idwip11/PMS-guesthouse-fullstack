@@ -1,7 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 import { getCurrentUser, logout, type AuthUser } from '../services/authService';
+
+// Role-Based Access Control
+const FULL_ACCESS_ROLES = ['Atmin', 'Admin', 'Manager', 'Finance', 'Marketing', 'Operational'];
+const RESTRICTED_PATHS = ['/finance', '/marketing', '/ops']; // Hidden for limited roles
 
 const Sidebar = () => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -15,7 +19,7 @@ const Sidebar = () => {
     }
   }, []);
 
-  const navItems = [
+  const allNavItems = [
     { name: 'Dashboard', path: '/dashboard', icon: 'dashboard' },
     { name: 'Housekeeping', path: '/housekeeping', icon: 'cleaning_services' },
     { name: 'Room Map', path: '/room-map', icon: 'map' },
@@ -23,6 +27,18 @@ const Sidebar = () => {
     { name: 'Marketing', path: '/marketing', icon: 'campaign' },
     { name: 'Ops', path: '/ops', icon: 'engineering' },
   ];
+
+  // Filter nav items based on user role
+  const navItems = useMemo(() => {
+    const userRole = user?.role || '';
+    const hasFullAccess = FULL_ACCESS_ROLES.includes(userRole);
+    
+    if (hasFullAccess) {
+      return allNavItems;
+    }
+    // Limited roles: filter out restricted paths
+    return allNavItems.filter(item => !RESTRICTED_PATHS.includes(item.path));
+  }, [user?.role]);
 
   const systemItems = [
     { name: 'Settings', path: '/settings', icon: 'settings' },

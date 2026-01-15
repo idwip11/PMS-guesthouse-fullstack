@@ -1,5 +1,48 @@
 
+import { useState } from 'react';
+import { getCurrentUser } from '../services/authService';
+
 export default function Support() {
+  const [formData, setFormData] = useState({
+    subject: '',
+    category: 'General',
+    priority: 'Low',
+    message: ''
+  });
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    
+    // Get current user for context (if logged in)
+    const user = getCurrentUser();
+    const userEmail = user ? `${user.fullName} (${user.username})` : 'Anonymous';
+
+    try {
+      const response = await fetch('http://localhost:3000/api/support/ticket', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...formData,
+          userEmail
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to send ticket');
+
+      alert('Ticket submitted successfully! We will get back to you soon.');
+      setFormData({ subject: '', category: 'General', priority: 'Low', message: '' });
+    } catch (error) {
+      console.error('Error submitting ticket:', error);
+      alert('Failed to submit ticket. Please try again later.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-8">
       {/* Support Banner */}
@@ -92,7 +135,7 @@ export default function Support() {
                 <p className="text-xs text-slate-500 dark:text-slate-400">For non-urgent technical issues</p>
               </div>
             </div>
-            <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+            <form className="space-y-4" onSubmit={handleSubmit}>
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1" htmlFor="subject">Subject</label>
                 <input 
@@ -100,6 +143,9 @@ export default function Support() {
                   id="subject" 
                   placeholder="Brief description of the issue" 
                   type="text"
+                  value={formData.subject}
+                  onChange={(e) => setFormData({...formData, subject: e.target.value})}
+                  required
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -108,6 +154,8 @@ export default function Support() {
                   <select 
                     className="w-full bg-slate-50 dark:bg-slate-800/50 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all dark:text-white" 
                     id="category"
+                    value={formData.category}
+                    onChange={(e) => setFormData({...formData, category: e.target.value})}
                   >
                     <option>General</option>
                     <option>Billing</option>
@@ -120,6 +168,8 @@ export default function Support() {
                   <select 
                     className="w-full bg-slate-50 dark:bg-slate-800/50 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all dark:text-white" 
                     id="priority"
+                    value={formData.priority}
+                    onChange={(e) => setFormData({...formData, priority: e.target.value})}
                   >
                     <option>Low</option>
                     <option>Medium</option>
@@ -133,12 +183,25 @@ export default function Support() {
                   className="w-full bg-slate-50 dark:bg-slate-800/50 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all dark:text-white placeholder-slate-400 h-32 resize-none" 
                   id="message" 
                   placeholder="Describe the problem in detail..."
+                  value={formData.message}
+                  onChange={(e) => setFormData({...formData, message: e.target.value})}
+                  required
                 ></textarea>
               </div>
               <div className="pt-2">
-                <button className="w-full bg-primary hover:bg-blue-700 text-white font-medium py-3 rounded-xl shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2">
-                  <span>Submit Ticket</span>
-                  <span className="material-icons-round text-sm">send</span>
+                <button 
+                  type="submit"
+                  disabled={submitting}
+                  className={`w-full bg-primary hover:bg-blue-700 text-white font-medium py-3 rounded-xl shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 ${submitting ? 'opacity-70 cursor-not-allowed' : ''}`}
+                >
+                  {submitting ? (
+                    <span>Sending...</span>
+                  ) : (
+                    <>
+                      <span>Submit Ticket</span>
+                      <span className="material-icons-round text-sm">send</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>

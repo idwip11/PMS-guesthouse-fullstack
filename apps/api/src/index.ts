@@ -23,6 +23,8 @@ import marketingRouter from './routes/marketing';
 import uploadRouter from './routes/upload';
 import budgetsRouter from './routes/budgets';
 
+import supportRouter from './routes/support';
+
 dotenv.config();
 
 const app = express();
@@ -61,10 +63,10 @@ app.use('/api/maintenance', maintenanceRouter);
 app.use('/api/shifts', shiftsRouter);
 app.use('/api/cleaning-tasks', cleaningTasksRouter);
 app.use('/api/finance', financeRouter);
-app.use('/api/finance', financeRouter);
 app.use('/api/marketing', marketingRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/budgets', budgetsRouter);
+app.use('/api/support', supportRouter);
 
 // Serve uploaded files statically
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));

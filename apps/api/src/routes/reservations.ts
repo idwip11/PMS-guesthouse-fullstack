@@ -28,6 +28,48 @@ async function checkRoomOverlap(roomId: number, checkInDate: string, checkOutDat
   return overlapping.length > 0;
 }
 
+// GET /api/reservations/search - Search reservations by guest name or order ID
+router.get('/search', async (req, res) => {
+  try {
+    const { q } = req.query;
+    
+    if (!q || typeof q !== 'string') {
+      return res.json([]);
+    }
+
+    const searchQuery = `%${q.toLowerCase()}%`;
+
+    const searchResults = await db.select({
+      id: reservations.id,
+      guestId: reservations.guestId,
+      roomId: reservations.roomId,
+      orderId: reservations.orderId,
+      checkInDate: reservations.checkInDate,
+      checkOutDate: reservations.checkOutDate,
+      status: reservations.status,
+      totalAmount: reservations.totalAmount,
+      guestName: guests.fullName,
+      roomNumber: rooms.roomNumber,
+      roomType: rooms.roomType,
+    })
+    .from(reservations)
+    .leftJoin(guests, eq(reservations.guestId, guests.id))
+    .leftJoin(rooms, eq(reservations.roomId, rooms.id))
+    .where(
+      or(
+        sql`LOWER(${guests.fullName}) LIKE ${searchQuery}`,
+        sql`LOWER(${reservations.orderId}) LIKE ${searchQuery}`
+      )
+    )
+    .limit(10); // Limit results for performance
+
+    res.json(searchResults);
+  } catch (error) {
+    console.error('Error searching reservations:', error);
+    res.status(500).json({ message: 'Failed to search reservations' });
+  }
+});
+
 // GET /api/reservations - Get all reservations with details
 router.get('/', async (req, res) => {
   try {

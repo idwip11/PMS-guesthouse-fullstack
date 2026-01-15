@@ -15,7 +15,11 @@ import NewBookingModal from './components/NewBookingModal';
 import CreateInvoiceModal from './components/CreateInvoiceModal';
 import NewTaskModal from './components/NewTaskModal';
 import LogExpenseModal from './components/LogExpenseModal';
-import { isAuthenticated } from './services/authService';
+import BookingDetailsModal from './components/BookingDetailsModal';
+import { isAuthenticated, getCurrentUser } from './services/authService';
+
+// Role-Based Access Control Constants
+const FULL_ACCESS_ROLES = ['Atmin', 'Admin', 'Manager', 'Finance', 'Marketing', 'Operational'];
 
 // Protected Route wrapper - redirects to login if not authenticated
 const ProtectedRoute = () => {
@@ -25,11 +29,33 @@ const ProtectedRoute = () => {
   return <Layout />;
 };
 
+// Role-based route guard - redirects to dashboard if user lacks permission
+const RoleProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const user = getCurrentUser();
+  const userRole = user?.role || '';
+  
+  if (!FULL_ACCESS_ROLES.includes(userRole)) {
+    // Limited role trying to access restricted page - redirect to dashboard
+    return <Navigate to="/dashboard" replace />;
+  }
+  
+  return <>{children}</>;
+};
+
 const Layout = () => {
   const [isNewBookingOpen, setIsNewBookingOpen] = useState(false);
   const [isCreateInvoiceOpen, setIsCreateInvoiceOpen] = useState(false);
   const [isNewTaskOpen, setIsNewTaskOpen] = useState(false);
   const [isLogExpenseModalOpen, setIsLogExpenseModalOpen] = useState(false);
+  
+  // Search Integration: Booking Details Modal
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  const [isBookingDetailsOpen, setIsBookingDetailsOpen] = useState(false);
+
+  const handleEditBooking = (id: string) => {
+    setSelectedBookingId(id);
+    setIsBookingDetailsOpen(true);
+  };
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -46,6 +72,7 @@ const Layout = () => {
           onCreateInvoice={() => setIsCreateInvoiceOpen(true)}
           onNewTask={() => setIsNewTaskOpen(true)}
           onLogExpense={() => setIsLogExpenseModalOpen(true)}
+          onEditBooking={handleEditBooking}
         />
 
         <main className="flex-1 overflow-y-auto p-4 md:p-8 pb-20">
@@ -56,6 +83,14 @@ const Layout = () => {
         <CreateInvoiceModal isOpen={isCreateInvoiceOpen} onClose={() => setIsCreateInvoiceOpen(false)} />
         <NewTaskModal isOpen={isNewTaskOpen} onClose={() => setIsNewTaskOpen(false)} />
         <LogExpenseModal isOpen={isLogExpenseModalOpen} onClose={() => setIsLogExpenseModalOpen(false)} />
+        <BookingDetailsModal 
+          isOpen={isBookingDetailsOpen} 
+          onClose={() => {
+            setIsBookingDetailsOpen(false);
+            setSelectedBookingId(null);
+          }} 
+          bookingId={selectedBookingId} 
+        />
       </div>
     </div>
   );
@@ -73,9 +108,9 @@ function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/housekeeping" element={<Housekeeping />} />
           <Route path="/room-map" element={<RoomMap />} />
-          <Route path="/finance" element={<Finance />} />
-          <Route path="/marketing" element={<Marketing />} />
-          <Route path="/ops" element={<Ops />} />
+          <Route path="/finance" element={<RoleProtectedRoute><Finance /></RoleProtectedRoute>} />
+          <Route path="/marketing" element={<RoleProtectedRoute><Marketing /></RoleProtectedRoute>} />
+          <Route path="/ops" element={<RoleProtectedRoute><Ops /></RoleProtectedRoute>} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/support" element={<Support />} />
         </Route>
