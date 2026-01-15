@@ -31,7 +31,9 @@ export default function Header({ onNewBooking, onCreateInvoice, onNewTask, onLog
       if (searchQuery.length >= 2) {
         setIsSearching(true);
         try {
-          const response = await fetch(`http://localhost:3000/api/reservations/search?q=${encodeURIComponent(searchQuery)}`);
+          // Use environment variable for API URL
+          const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
+          const response = await fetch(`${apiBaseUrl}/reservations/search?q=${encodeURIComponent(searchQuery)}`);
           if (response.ok) {
             const data = await response.json();
             setSearchResults(data);
