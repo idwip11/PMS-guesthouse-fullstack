@@ -32,7 +32,9 @@ export default function Header({ onNewBooking, onCreateInvoice, onNewTask, onLog
         setIsSearching(true);
         try {
           // Use environment variable for API URL
-          const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
+          const rawUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
+          const apiBaseUrl = rawUrl.startsWith('http') ? rawUrl : `https://${rawUrl}/api`;
+          
           const response = await fetch(`${apiBaseUrl}/reservations/search?q=${encodeURIComponent(searchQuery)}`);
           if (response.ok) {
             const data = await response.json();

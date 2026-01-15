@@ -13,12 +13,8 @@ services:
     plan: free
     region: singapore
     buildCommand: npm install -g pnpm && pnpm install && pnpm --filter api build
-    preDeployCommand: node apps/api/dist/db/migrate.js
-    startCommand: node apps/api/dist/index.js
-    headers:
-      - path: /*
-        name: Access-Control-Allow-Origin
-        value: "*"
+    # Free tier does not support preDeployCommand, chaining migration to startCommand
+    startCommand: node apps/api/dist/db/migrate.js && node apps/api/dist/index.js
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -38,7 +34,7 @@ services:
     name: homiq-web
     env: static
     plan: free
-    region: singapore
+    # Static sites do not support region (Global CDN)
     buildCommand: npm install -g pnpm && pnpm install && pnpm --filter web build
     staticPublishPath: apps/web/dist
     envVars:
@@ -46,4 +42,4 @@ services:
         fromService:
           type: web
           name: homiq-api
-          property: url
+          property: host # 'url' is invalid, using 'host' and handling https in code

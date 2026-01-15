@@ -1,8 +1,12 @@
 // Authentication Service for HomiQ PMS Frontend
 
 // Authentication Service for HomiQ PMS Frontend
+const getApiBaseUrl = () => {
+  const url = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
+  return url.startsWith('http') ? url : `https://${url}/api`;
+};
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
+const API_BASE_URL = getApiBaseUrl();
 
 export interface AuthUser {
   id: string;
