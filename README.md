@@ -140,6 +140,15 @@ PMS-guesthouse-fullstack/
    cd apps/web && npm run dev
    ```
 
+## 🔒 Source Code Access (Download)
+
+The source code for this repository is password protected. To download the full source code:
+
+1. Go to the **[Releases](../../releases)** tab.
+2. Download the `HomiQ-Source-Code.zip` file.
+3. Extract the ZIP using the password provided by the owner.
+4. Follow the installation steps above.
+
 ---
 
 ## 🛡 Security & Best Practices
