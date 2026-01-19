@@ -1,5 +1,5 @@
 
-# HomiQ PMS - Full-Stack Property Management System
+# Full-Stack Property Management System
 
 **HomiQ PMS** is a modern, full-stack Property Management System designed for guesthouses and small hotels. It provides a comprehensive dashboard for managing operations, finance, staff rosters, and guest reservations in real-time.
 
